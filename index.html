@@ -1,0 +1,2933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Cup Forecaster</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+/* ── World Cup 2026 Forecaster — quant desk meets editorial broadsheet ── */
+:root{
+  --ink:#0a0f0e;
+  --ink-1:#0d1311;
+  --ink-2:#121a17;
+  --ink-3:#17201d;
+  --ink-4:#1d2723;
+  --line:rgba(233,231,221,0.10);
+  --line-2:rgba(233,231,221,0.18);
+  --text:#e9e7dd;
+  --dim:rgba(233,231,221,0.62);
+  --faint:rgba(233,231,221,0.40);
+  --ghost:rgba(233,231,221,0.22);
+  --amber:#e3b341;
+  --amber-dim:rgba(227,179,65,0.16);
+  --green:#46b87a;
+  --green-dim:rgba(70,184,122,0.16);
+  --red:#d2685a;
+  --red-dim:rgba(210,104,90,0.16);
+  --blue:#5aa6d2;
+  --blue-dim:rgba(90,166,210,0.16);
+  --serif:'Fraunces',Georgia,serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --sans:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;
+}
+*{box-sizing:border-box;}
+button{font-family:inherit;color:inherit;}
+html,body{margin:0;padding:0;}
+body{background:#05080a;font-family:var(--sans);}
+
+/* app shell inside the device */
+.wc{
+  position:relative;height:100%;display:flex;flex-direction:column;
+  background:var(--ink);color:var(--text);
+  font-family:var(--sans);-webkit-font-smoothing:antialiased;
+  font-size:15px;line-height:1.45;overflow:hidden;
+}
+/* subtle grain overlay */
+.wc::after{
+  content:"";position:absolute;inset:0;z-index:60;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  opacity:0.035;mix-blend-mode:overlay;
+}
+
+/* tabular numerals everywhere mono is used */
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;letter-spacing:-0.01em;}
+.serif{font-family:var(--serif);font-optical-sizing:auto;}
+
+/* ── scroll region ── */
+.wc-main{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;position:relative;z-index:1;}
+.wc-main::-webkit-scrollbar{width:0;height:0;}
+
+/* ── header ── */
+.wc-head{
+  padding:54px 18px 12px;position:relative;z-index:3;
+  background:linear-gradient(var(--ink) 72%,rgba(10,15,14,0));
+}
+.wc-head-row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;}
+.wc-kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;color:var(--faint);display:flex;align-items:center;gap:7px;white-space:nowrap;}
+.wc-title{font-family:var(--serif);font-weight:600;font-size:30px;line-height:1.0;letter-spacing:-0.01em;margin:3px 0 0;}
+.wc-sub{font-size:12.5px;color:var(--dim);margin-top:7px;max-width:30ch;text-wrap:pretty;}
+.dot{width:5px;height:5px;border-radius:50%;background:var(--amber);display:inline-block;}
+.dot.live{box-shadow:0 0 0 0 rgba(227,179,65,.5);animation:pulse 2.4s infinite;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(227,179,65,.45)}70%{box-shadow:0 0 0 6px rgba(227,179,65,0)}100%{box-shadow:0 0 0 0 rgba(227,179,65,0)}}
+
+/* ── tab bar ── */
+.wc-tabs{
+  position:relative;z-index:5;flex-shrink:0;
+  display:grid;grid-template-columns:repeat(5,1fr);
+  padding:8px 8px 26px;gap:2px;
+  background:rgba(10,15,14,0.82);
+  -webkit-backdrop-filter:blur(18px) saturate(160%);backdrop-filter:blur(18px) saturate(160%);
+  border-top:1px solid var(--line);
+}
+.wc-tab{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:6px 2px 3px;border:0;background:none;cursor:pointer;border-radius:12px;
+  color:var(--ghost);transition:color .18s;
+}
+.wc-tab.on{color:var(--amber);}
+.wc-tab .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:0.05em;text-transform:uppercase;}
+.wc-tab svg{width:21px;height:21px;display:block;}
+
+/* ── primitives ── */
+.hair{height:1px;background:var(--line);border:0;margin:0;}
+.card{background:var(--ink-2);border:1px solid var(--line);border-radius:14px;}
+.chip{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums;padding:2px 7px;border-radius:7px;letter-spacing:-0.01em;}
+.chip.green{color:var(--green);background:var(--green-dim);}
+.chip.red{color:var(--red);background:var(--red-dim);}
+.chip.flat{color:var(--faint);background:rgba(233,231,221,0.06);}
+.chip.amber{color:var(--amber);background:var(--amber-dim);}
+.chip.blue{color:var(--blue);background:var(--blue-dim);}
+
+.badge-null{
+  display:inline-flex;align-items:center;gap:5px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:0.02em;
+  color:var(--faint);background:repeating-linear-gradient(135deg,rgba(233,231,221,0.05),rgba(233,231,221,0.05) 5px,transparent 5px,transparent 10px);
+  border:1px dashed var(--line-2);border-radius:7px;padding:3px 8px;
+}
+
+/* probability bar */
+.pbar{position:relative;height:3px;border-radius:2px;background:rgba(233,231,221,0.09);overflow:hidden;}
+.pbar > i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--amber);transition:width .9s cubic-bezier(.2,.7,.2,1);}
+
+/* flag chip */
+.flag{width:26px;height:18px;border-radius:3px;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;font-size:15px;background:var(--ink-4);flex-shrink:0;box-shadow:inset 0 0 0 1px var(--line);line-height:1;}
+.flag.lg{width:38px;height:27px;font-size:23px;border-radius:5px;}
+.flag.sm{width:22px;height:15px;font-size:12px;}
+
+/* buttons / toggles */
+.seg{display:inline-flex;background:var(--ink-1);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px;}
+.seg button{font-family:var(--mono);font-size:11px;letter-spacing:0.02em;color:var(--dim);background:none;border:0;padding:5px 9px;border-radius:7px;cursor:pointer;text-transform:uppercase;}
+.seg button.on{background:var(--ink-4);color:var(--text);}
+
+.btn{font-family:var(--sans);font-size:14px;font-weight:600;border:0;border-radius:11px;padding:13px 16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;}
+.btn.primary{background:var(--amber);color:#1a1407;}
+.btn.ghost{background:var(--ink-3);color:var(--text);border:1px solid var(--line);}
+
+/* fade-in stagger */
+@media (prefers-reduced-motion:no-preference){
+  .rise{opacity:0;transform:translateY(8px);animation:rise .5s cubic-bezier(.2,.7,.2,1) forwards;}
+  @keyframes rise{to{opacity:1;transform:none;}}
+}
+
+/* skeleton */
+.sk{background:linear-gradient(90deg,var(--ink-2),var(--ink-4),var(--ink-2));background-size:200% 100%;animation:sh 1.3s infinite;border-radius:6px;}
+@keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+.label{font-family:var(--mono);font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--faint);}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-0.01em;}
+
+/* tweak toggles */
+.wc.no-grain::after{display:none;}
+.wc.no-motion .rise{opacity:1 !important;transform:none !important;animation:none !important;}
+
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <!-- React first -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <!-- App data as plain script (NOT Babel) -->
+  <script>
+window.appData = {"meta":{"runDate":"Jun 6, 2026 · 09:41","runId":"#1184","sims":40000,"changeLine":"Spain firms to 13.5% as France slips on a defender doubt; Germany the week’s biggest riser (+1.9pp).","movers":{"up":"GER","down":"FRA"},"coverage":[{"conf":"UEFA","real":18,"total":18},{"conf":"CONMEBOL","real":6,"total":6},{"conf":"CONCACAF","real":3,"total":6},{"conf":"CAF","real":3,"total":9},{"conf":"AFC","real":3,"total":8},{"conf":"OFC","real":0,"total":1}],"fragility":[{"sev":"high","title":"Cross-confederation calibration","text":"Inter-confederation match priors lean on sparse historical fixtures. Treat AFC/CAF vs UEFA knockout odds as wide."},{"sev":"high","title":"17 teams on baseline-only","text":"No match-level xG for 17 of 48 teams. Their ratings are Elo-anchored and will not respond to in-tournament performance as sharply."},{"sev":"med","title":"Pundit signal is opinion, capped","text":"Capped at ±25 Elo per team. A loud consensus cannot override the data model — by design."},{"sev":"med","title":"Low-sample xG (4 teams)","text":"POR, URU, TUR, SCO carry <6 matches of xG. Figures shown with an uncertainty band."},{"sev":"low","title":"Host boost is a flat prior","text":"USA/CAN/MEX get a fixed home adjustment, not a venue-by-venue model."}],"pundit":{"cap":25,"note":"Pundit influence is hard-capped at ±25 Elo per team. The model owns the forecast; experts can only nudge it."}},"teams":[{"id":"ESP","name":"Spain","code":"ESP","flag":"🇪🇸","conf":"UEFA","win":0.134815608024959,"fin":0.22108293061055304,"sf":0.34741504354436353,"qf":0.5181015259989157,"r16":0.7257978469778555,"r32":0.9494134442311335,"groupExit":0.050586555768866504,"xg":{"hasXg":true,"xg90":2.05,"xga90":0.6,"mp":6,"lowConf":false},"signal":{"value":-0.84,"confidence":64,"eloAdj":-25,"capped":true,"claims":[{"src":"Lindqvist","date":"Jun 5","text":"warns the back line is exposed in transition"},{"src":"Lindqvist","date":"Jun 3","text":"calls them a classic dark-horse, high variance"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":1,"netChange":0,"group":"A","injuries":[{"player":"K. Bauer","status":"Doubtful","tone":"clay","date":"Jun 4"},{"player":"J. Smith","status":"Fit","tone":"green","date":"Jun 3"},{"player":"A. Khan","status":"Fit","tone":"green","date":"Jun 3"}],"scenarios":[{"label":"Star striker fit","delta":0.8},{"label":"Key defender out","delta":-0.8},{"label":"Favourable QF draw","delta":1}],"drivers":["Deepest midfield in the field (xG-creation top 3)","Easy group draw — 0.94 to reach R32","Pundit signal mildly negative on final-third finishing"]},{"id":"FRA","name":"France","code":"FRA","flag":"🇫🇷","conf":"UEFA","win":0.12113949593098955,"fin":0.2028050273105808,"sf":0.3251311309329363,"qf":0.49436480392472903,"r16":0.7057628071828757,"r32":0.9404064160902569,"groupExit":0.05959358390974312,"xg":{"hasXg":true,"xg90":2.36,"xga90":1.18,"mp":11,"lowConf":false},"signal":{"value":-0.05,"confidence":81,"eloAdj":-1,"capped":false,"claims":[{"src":"Pearce","date":"Jun 4","text":"sees a wide outcome range — could go either way"},{"src":"Boateng","date":"Jun 4","text":"questions squad depth past the first XI"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":2,"netChange":1.4,"group":"B","injuries":[{"player":"D. Silva","status":"Returning","tone":"amber","date":"Jun 4"},{"player":"A. Khan","status":"Out","tone":"clay","date":"Jun 2"}],"scenarios":[{"label":"Star striker fit","delta":0.5},{"label":"Key defender out","delta":-0.9},{"label":"Favourable QF draw","delta":0.2}],"drivers":["Elite spine, top-5 xGA/90","Mbappé availability confirmed — scenario locked","Knockout variance high: clay-red fragility flag on PK record"]},{"id":"ENG","name":"England","code":"ENG","flag":"🏴","conf":"UEFA","win":0.10249877859690226,"fin":0.17676689526740616,"sf":0.2916360886295757,"qf":0.4559355391468342,"r16":0.6687694720750218,"r32":0.9149804549825165,"groupExit":0.08501954501748354,"xg":{"hasXg":true,"xg90":1.41,"xga90":1.34,"mp":7,"lowConf":false},"signal":{"value":-0.2,"confidence":45,"eloAdj":-6,"capped":false,"claims":[{"src":"Rossetti","date":"Jun 5","text":"warns the back line is exposed in transition"},{"src":"Boateng","date":"Jun 2","text":"questions squad depth past the first XI"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":3,"netChange":-1.3,"group":"C","injuries":[{"player":"T. Okafor","status":"Returning","tone":"amber","date":"Jun 3"},{"player":"D. Silva","status":"Doubtful","tone":"clay","date":"Jun 5"}],"scenarios":[{"label":"Star striker fit","delta":1.6},{"label":"Key defender out","delta":-0.9},{"label":"Favourable QF draw","delta":0.5}],"drivers":["Strongest reach-R16 odds outside Spain","Squad depth blunts injury downside","Signal: pundits split, capped at +25 Elo"]},{"id":"ARG","name":"Argentina","code":"ARG","flag":"🇦🇷","conf":"CONMEBOL","win":0.09526818084906145,"fin":0.16644601164374395,"sf":0.2780771834944316,"qf":0.4400543366846624,"r16":0.6531594779357223,"r32":0.9039999594323275,"groupExit":0.09600004056767253,"xg":{"hasXg":true,"xg90":1.16,"xga90":1.36,"mp":9,"lowConf":false},"signal":{"value":0.65,"confidence":48,"eloAdj":20,"capped":false,"claims":[{"src":"Diallo","date":"Jun 5","text":"flags improved finishing under the new staff"},{"src":"Rossetti","date":"Jun 5","text":"calls them a classic dark-horse, high variance"}],"trackNote":"Track record: this source over-rated 2 of last 3 picks — discount applied."},"rank":4,"netChange":0,"group":"D","injuries":[],"scenarios":[{"label":"Star striker fit","delta":0.6},{"label":"Key defender out","delta":-1.2},{"label":"Favourable QF draw","delta":0.3}],"drivers":["Holders premium baked into Elo","Messi minutes-managed — star-out scenario −2.1pp","CONMEBOL travel load noted in fragility list"]},{"id":"BRA","name":"Brazil","code":"BRA","flag":"🇧🇷","conf":"CONMEBOL","win":0.08240752506793507,"fin":0.14917971577517047,"sf":0.25791887410725073,"qf":0.42191285621142927,"r16":0.6467660582906009,"r32":0.9237545842063427,"groupExit":0.07624541579365729,"xg":{"hasXg":true,"xg90":1.55,"xga90":0.81,"mp":11,"lowConf":false},"signal":{"value":-0.69,"confidence":76,"eloAdj":-21,"capped":false,"claims":[{"src":"Pearce","date":"Jun 4","text":"warns the back line is exposed in transition"},{"src":"Lindqvist","date":"Jun 2","text":"questions squad depth past the first XI"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":5,"netChange":0.1,"group":"E","injuries":[],"scenarios":[{"label":"Star striker fit","delta":1.5},{"label":"Key defender out","delta":-1.3},{"label":"Favourable QF draw","delta":0.9}],"drivers":["Highest attacking xG/90 in dataset","New manager bounce partly priced in","Defensive sample thin vs top-10 opponents"]},{"id":"GER","name":"Germany","code":"GER","flag":"🇩🇪","conf":"UEFA","win":0.06324482791870285,"fin":0.119341900903919,"sf":0.21475384872878056,"qf":0.36514979244678714,"r16":0.5811904527847646,"r32":0.8610479823981707,"groupExit":0.1389520176018293,"xg":{"hasXg":true,"xg90":1.37,"xga90":1.29,"mp":10,"lowConf":false},"signal":{"value":-0.71,"confidence":57,"eloAdj":-21,"capped":false,"claims":[{"src":"Tanaka","date":"Jun 5","text":"sees fatigue risk from a congested calendar"},{"src":"Ortega","date":"Jun 2","text":"questions squad depth past the first XI"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":6,"netChange":-2.2,"group":"F","injuries":[{"player":"G. Álvarez","status":"Doubtful","tone":"clay","date":"Jun 4"}],"scenarios":[{"label":"Star striker fit","delta":1.4},{"label":"Key defender out","delta":-1.7},{"label":"Favourable QF draw","delta":0.8}],"drivers":["Host-adjacent form curve trending up (+1.9pp)","Midfield control metrics strong","Finishing variance widens SF band"]},{"id":"POR","name":"Portugal","code":"POR","flag":"🇵🇹","conf":"UEFA","win":0.058356651709548533,"fin":0.1116957930437932,"sf":0.20376723392047671,"qf":0.3510821060810623,"r16":0.5660259367169816,"r32":0.8491356642391994,"groupExit":0.1508643357608006,"xg":{"hasXg":true,"xg90":2.32,"xga90":0.71,"mp":4,"lowConf":true},"signal":{"value":0.23,"confidence":67,"eloAdj":7,"capped":false,"claims":[{"src":"Mendes","date":"Jun 3","text":"flags improved finishing under the new staff"},{"src":"Tanaka","date":"Jun 5","text":"rates the press resistance as elite this cycle"}],"trackNote":"Track record: this source over-rated 2 of last 3 picks — discount applied."},"rank":7,"netChange":2.5,"group":"G","injuries":[],"scenarios":[{"label":"Star striker fit","delta":1.5},{"label":"Key defender out","delta":-1.5},{"label":"Favourable QF draw","delta":0.6}],"drivers":["Low-sample xG — confidence band wide","Golden-generation depth","Signal positive but capped"]},{"id":"NED","name":"Netherlands","code":"NED","flag":"🇳🇱","conf":"UEFA","win":0.04852817521430538,"fin":0.09705580845451856,"sf":0.18470255036264724,"qf":0.33147470925344386,"r16":0.5559839470216306,"r32":0.8667992625820973,"groupExit":0.13320073741790273,"xg":{"hasXg":true,"xg90":1.41,"xga90":1.36,"mp":11,"lowConf":false},"signal":{"value":-0.4,"confidence":77,"eloAdj":-12,"capped":false,"claims":[{"src":"Pearce","date":"Jun 5","text":"warns the back line is exposed in transition"},{"src":"Rossetti","date":"Jun 3","text":"questions squad depth past the first XI"}],"trackNote":"Track record: well-calibrated historically (Brier 0.19)."},"rank":8,"netChange":-1.8,"group":"H","injuries":[{"player":"F. Costa","status":"Late fitness test","tone":"amber","date":"Jun 4"},{"player":"T. Okafor","status":"Doubtful","tone":"clay","date":"Jun 5"}],"scenarios":[{"label":"Star striker fit","delta":1.5},{"label":"Key defender out","delta":-0.5},{"label":"Favourable QF draw","delta":1}],"drivers":["Balanced two-way profile","Set-piece edge in tight knockouts","Group draw tougher than seed implies"]},{"id":"ITA","name":"Italy","code":"ITA","flag":"🇮🇹","conf":"UEFA","win":0.03690887282829641,"fin":0.07769476646424048,"sf":0.15530642933895825,"qf":0.2922283857292701,"r16":0.5131695017097442,"r32":0.8365216029684696,"groupExit":0.16347839703153044,"xg":{"hasXg":true,"xg90":1.98,"xga90":1.45,"mp":7,"lowConf":false},"signal":{"value":-0.12,"confidence":76,"eloAdj":-4,"capped":false,"claims":[{"src":"Ortega","date":"Jun 5","text":"sees a wide outcome range — could go either way"},{"src":"Mendes","date":"Jun 2","text":"rates them on talent but unproven vs elite"}],"trackNote":"Track record: well-calibrated historically (Brier 0.19)."},"rank":9,"netChange":0,"group":"I","injuries":[{"player":"R. Tanaka","status":"Fit","tone":"green","date":"Jun 3"}],"scenarios":[{"label":"Star striker fit","delta":0.4},{"label":"Key defender out","delta":-2}],"drivers":["Reaches R32 in 84% of sims","xG/90 1.98 on 7 matches","Flat vs last run"]},{"id":"BEL","name":"Belgium","code":"BEL","flag":"🇧🇪","conf":"UEFA","win":0.0322054989847397,"fin":0.06924894906762923,"sf":0.14127069693030966,"qf":0.2710738430204181,"r16":0.4851320137083503,"r32":0.8055056060969106,"groupExit":0.19449439390308942,"xg":{"hasXg":true,"xg90":1.68,"xga90":1.41,"mp":8,"lowConf":false},"signal":{"value":0.28,"confidence":35,"eloAdj":8,"capped":false,"claims":[{"src":"Rossetti","date":"Jun 3","text":"flags improved finishing under the new staff"},{"src":"Lindqvist","date":"Jun 5","text":"sees a wide outcome range — could go either way"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":10,"netChange":0.5,"group":"J","injuries":[{"player":"G. Álvarez","status":"Late fitness test","tone":"amber","date":"Jun 2"},{"player":"A. Khan","status":"Late fitness test","tone":"amber","date":"Jun 2"},{"player":"K. Bauer","status":"Doubtful","tone":"clay","date":"Jun 5"}],"scenarios":[{"label":"Star striker fit","delta":1.3},{"label":"Key defender out","delta":-1.3}],"drivers":["Reaches R32 in 81% of sims","xG/90 1.68 on 8 matches","Up 0.5pp this run"]},{"id":"URU","name":"Uruguay","code":"URU","flag":"🇺🇾","conf":"CONMEBOL","win":0.028955182454125834,"fin":0.06362557487230878,"sf":0.13252432031877676,"qf":0.25942000504970286,"r16":0.47333519509517347,"r32":0.8007917392974344,"groupExit":0.1992082607025656,"xg":{"hasXg":true,"xg90":1.94,"xga90":0.7,"mp":5,"lowConf":true},"signal":{"value":-0.15,"confidence":62,"eloAdj":-4,"capped":false,"claims":[{"src":"Boateng","date":"Jun 5","text":"sees a wide outcome range — could go either way"},{"src":"Boateng","date":"Jun 5","text":"sees fatigue risk from a congested calendar"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":11,"netChange":-1,"group":"K","injuries":[],"scenarios":[{"label":"Star striker fit","delta":1},{"label":"Key defender out","delta":-1}],"drivers":["Reaches R32 in 80% of sims","xG/90 1.94 on 5 matches","Down 1pp this run"]},{"id":"CRO","name":"Croatia","code":"CRO","flag":"🇭🇷","conf":"UEFA","win":0.02169372405385943,"fin":0.050434799711237814,"sf":0.11086969574891666,"qf":0.2285551105869317,"r16":0.4384066119728921,"r32":0.7785333894698431,"groupExit":0.22146661053015693,"xg":{"hasXg":true,"xg90":2.12,"xga90":1.24,"mp":11,"lowConf":false},"signal":{"value":-0.8,"confidence":60,"eloAdj":-24,"capped":false,"claims":[{"src":"Boateng","date":"Jun 4","text":"questions squad depth past the first XI"},{"src":"Diallo","date":"Jun 2","text":"sees a wide outcome range — could go either way"}],"trackNote":"Track record: well-calibrated historically (Brier 0.19)."},"rank":12,"netChange":1.2,"group":"L","injuries":[{"player":"R. Tanaka","status":"Doubtful","tone":"clay","date":"Jun 2"}],"scenarios":[{"label":"Star striker fit","delta":0.9},{"label":"Key defender out","delta":-1.8}],"drivers":["Reaches R32 in 78% of sims","xG/90 2.12 on 11 matches","Up 1.2pp this run"]},{"id":"MAR","name":"Morocco","code":"MAR","flag":"🇲🇦","conf":"CAF","win":0.020448808325562895,"fin":0.04809861264686672,"sf":0.10691885179282162,"qf":0.22277649453035214,"r16":0.431750810469745,"r32":0.774405513909277,"groupExit":0.22559448609072297,"xg":{"hasXg":true,"xg90":1.06,"xga90":0.55,"mp":7,"lowConf":false},"signal":{"value":0.94,"confidence":52,"eloAdj":25,"capped":true,"claims":[{"src":"Lindqvist","date":"Jun 2","text":"expects a deep run on current form"},{"src":"Mendes","date":"Jun 4","text":"sees a wide outcome range — could go either way"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":13,"netChange":-0.4,"group":"F","injuries":[],"scenarios":[{"label":"Star striker fit","delta":1},{"label":"Key defender out","delta":-0.8}],"drivers":["Reaches R32 in 77% of sims","xG/90 1.06 on 7 matches","Down 0.4pp this run"]},{"id":"COL","name":"Colombia","code":"COL","flag":"🇨🇴","conf":"CONMEBOL","win":0.018022812267317632,"fin":0.04341150016349572,"sf":0.09871194827459925,"qf":0.2101890203241805,"r16":0.4159776687342502,"r32":0.7613906980352664,"groupExit":0.23860930196473362,"xg":{"hasXg":true,"xg90":1.76,"xga90":0.84,"mp":11,"lowConf":false},"signal":{"value":-0.03,"confidence":72,"eloAdj":-1,"capped":false,"claims":[{"src":"Lindqvist","date":"Jun 2","text":"sees a wide outcome range — could go either way"},{"src":"Rossetti","date":"Jun 3","text":"calls them a classic dark-horse, high variance"}],"trackNote":"Track record: this source over-rated 2 of last 3 picks — discount applied."},"rank":14,"netChange":-0.4,"group":"G","injuries":[{"player":"K. Bauer","status":"Late fitness test","tone":"amber","date":"Jun 3"},{"player":"F. Costa","status":"Late fitness test","tone":"amber","date":"Jun 4"},{"player":"F. Costa","status":"Late fitness test","tone":"amber","date":"Jun 2"}],"scenarios":[{"label":"Star striker fit","delta":0.8},{"label":"Key defender out","delta":-1.8}],"drivers":["Reaches R32 in 76% of sims","xG/90 1.76 on 11 matches","Down 0.4pp this run"]},{"id":"DEN","name":"Denmark","code":"DEN","flag":"🇩🇰","conf":"UEFA","win":0.014594927696431186,"fin":0.03646996991048044,"sf":0.0858808833855219,"qf":0.18909046695419193,"r16":0.3864928209972444,"r32":0.7298375766060301,"groupExit":0.2701624233939699,"xg":{"hasXg":true,"xg90":1.6,"xga90":1.24,"mp":8,"lowConf":false},"signal":{"value":0.77,"confidence":51,"eloAdj":23,"capped":false,"claims":[{"src":"Pearce","date":"Jun 4","text":"expects a deep run on current form"},{"src":"Mendes","date":"Jun 3","text":"flags improved finishing under the new staff"}],"trackNote":"Track record: this source over-rated 2 of last 3 picks — discount applied."},"rank":15,"netChange":0,"group":"H","injuries":[{"player":"O. Berg","status":"Fit","tone":"green","date":"Jun 3"}],"scenarios":[{"label":"Star striker fit","delta":1.4},{"label":"Key defender out","delta":-2}],"drivers":["Reaches R32 in 73% of sims","xG/90 1.6 on 8 matches","Flat vs last run"]},{"id":"JPN","name":"Japan","code":"JPN","flag":"🇯🇵","conf":"AFC","win":0.012421825166483937,"fin":0.03183377121635191,"sf":0.07678628312255664,"qf":0.17299069149424964,"r16":0.3614875623445667,"r32":0.6973491195738856,"groupExit":0.30265088042611443,"xg":{"hasXg":true,"xg90":1.21,"xga90":1.32,"mp":8,"lowConf":false},"signal":{"value":0.63,"confidence":77,"eloAdj":19,"capped":false,"claims":[{"src":"Rossetti","date":"Jun 3","text":"rates the press resistance as elite this cycle"},{"src":"Lindqvist","date":"Jun 3","text":"flags improved finishing under the new staff"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":16,"netChange":-0.5,"group":"I","injuries":[{"player":"M. Rossi","status":"Out","tone":"clay","date":"Jun 4"},{"player":"G. Álvarez","status":"Doubtful","tone":"clay","date":"Jun 3"}],"scenarios":[{"label":"Star striker fit","delta":1.3},{"label":"Key defender out","delta":-0.5}],"drivers":["Reaches R32 in 70% of sims","xG/90 1.21 on 8 matches","Down 0.5pp this run"]},{"id":"USA","name":"USA","code":"USA","flag":"🇺🇸","conf":"CONCACAF","win":0.01179691687710796,"fin":0.03062396957378585,"sf":0.0747773055471521,"qf":0.1704429227301668,"r16":0.3601884308332722,"r32":0.7024218592203235,"groupExit":0.2975781407796765,"xg":{"hasXg":true,"xg90":2.05,"xga90":0.93,"mp":7,"lowConf":false},"signal":{"value":-0.89,"confidence":36,"eloAdj":-25,"capped":true,"claims":[{"src":"Boateng","date":"Jun 5","text":"sees fatigue risk from a congested calendar"},{"src":"Lindqvist","date":"Jun 4","text":"warns the back line is exposed in transition"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":17,"netChange":0.7,"group":"J","injuries":[{"player":"O. Berg","status":"Out","tone":"clay","date":"Jun 2"},{"player":"K. Bauer","status":"Doubtful","tone":"clay","date":"Jun 4"}],"scenarios":[{"label":"Star striker fit","delta":0.3},{"label":"Key defender out","delta":-0.8}],"drivers":["Reaches R32 in 70% of sims","xG/90 2.05 on 7 matches","Up 0.7pp this run"]},{"id":"SUI","name":"Switzerland","code":"SUI","flag":"🇨🇭","conf":"UEFA","win":0.010632544838802875,"fin":0.02833553277658046,"sf":0.07093560839615835,"qf":0.16557497638626614,"r16":0.3579921253857579,"r32":0.7137080829296713,"groupExit":0.28629191707032875,"xg":{"hasXg":true,"xg90":1.53,"xga90":1.21,"mp":8,"lowConf":false},"signal":{"value":-0.18,"confidence":54,"eloAdj":-5,"capped":false,"claims":[{"src":"Tanaka","date":"Jun 3","text":"warns the back line is exposed in transition"},{"src":"Tanaka","date":"Jun 4","text":"sees fatigue risk from a congested calendar"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":18,"netChange":-1.1,"group":"K","injuries":[{"player":"K. Bauer","status":"Fit","tone":"green","date":"Jun 5"},{"player":"L. Dubois","status":"Returning","tone":"amber","date":"Jun 3"}],"scenarios":[{"label":"Star striker fit","delta":0.7},{"label":"Key defender out","delta":-1}],"drivers":["Reaches R32 in 71% of sims","xG/90 1.53 on 8 matches","Down 1.1pp this run"]},{"id":"MEX","name":"Mexico","code":"MEX","flag":"🇲🇽","conf":"CONCACAF","win":0.009743326612327598,"fin":0.026315780718625847,"sf":0.06672127739729387,"qf":0.1576336178555667,"r16":0.3448085557349383,"r32":0.6951764106297833,"groupExit":0.3048235893702167,"xg":{"hasXg":true,"xg90":1.72,"xga90":0.94,"mp":9,"lowConf":false},"signal":{"value":-0.88,"confidence":78,"eloAdj":-25,"capped":true,"claims":[{"src":"Tanaka","date":"Jun 2","text":"questions squad depth past the first XI"},{"src":"Rossetti","date":"Jun 4","text":"sees fatigue risk from a congested calendar"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":19,"netChange":-0.7,"group":"L","injuries":[],"scenarios":[{"label":"Star striker fit","delta":1},{"label":"Key defender out","delta":-0.5}],"drivers":["Reaches R32 in 70% of sims","xG/90 1.72 on 9 matches","Down 0.7pp this run"]},{"id":"SEN","name":"Senegal","code":"SEN","flag":"🇸🇳","conf":"CAF","win":0.008729249617313114,"fin":0.023898996288795358,"sf":0.061378161241368016,"qf":0.1467968696156996,"r16":0.32490457460745437,"r32":0.6625183294441778,"groupExit":0.33748167055582223,"xg":{"hasXg":true,"xg90":1.98,"xga90":1.24,"mp":10,"lowConf":false},"signal":{"value":0.59,"confidence":81,"eloAdj":18,"capped":false,"claims":[{"src":"Lindqvist","date":"Jun 5","text":"rates the press resistance as elite this cycle"},{"src":"Rossetti","date":"Jun 2","text":"flags improved finishing under the new staff"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":20,"netChange":-0.3,"group":"A","injuries":[],"scenarios":[{"label":"Star striker fit","delta":0.3},{"label":"Key defender out","delta":-0.7}],"drivers":["Reaches R32 in 66% of sims","xG/90 1.98 on 10 matches","Down 0.3pp this run"]},{"id":"ECU","name":"Ecuador","code":"ECU","flag":"🇪🇨","conf":"CONMEBOL","win":0.007515598269489096,"fin":0.02145572608395266,"sf":0.057329780790873176,"qf":0.1423773183007122,"r16":0.3267234539666093,"r32":0.6898296733985503,"groupExit":0.3101703266014497,"xg":{"hasXg":true,"xg90":2.21,"xga90":1.27,"mp":8,"lowConf":false},"signal":{"value":0.94,"confidence":69,"eloAdj":25,"capped":true,"claims":[{"src":"Boateng","date":"Jun 2","text":"flags improved finishing under the new staff"},{"src":"Rossetti","date":"Jun 5","text":"rates the press resistance as elite this cycle"}],"trackNote":"Track record: this source over-rated 2 of last 3 picks — discount applied."},"rank":21,"netChange":-0.5,"group":"B","injuries":[{"player":"T. Okafor","status":"Returning","tone":"amber","date":"Jun 2"},{"player":"R. Tanaka","status":"Late fitness test","tone":"amber","date":"Jun 3"}],"scenarios":[{"label":"Star striker fit","delta":0.7},{"label":"Key defender out","delta":-0.8}],"drivers":["Reaches R32 in 69% of sims","xG/90 2.21 on 8 matches","Down 0.5pp this run"]},{"id":"AUT","name":"Austria","code":"AUT","flag":"🇦🇹","conf":"UEFA","win":0.006623191952729669,"fin":0.019181344907457078,"sf":0.051952354893565915,"qf":0.13069474898865457,"r16":0.3036406063405913,"r32":0.6487546997659654,"groupExit":0.35124530023403455,"xg":{"hasXg":true,"xg90":1.31,"xga90":0.8,"mp":8,"lowConf":false},"signal":{"value":0.1,"confidence":39,"eloAdj":3,"capped":false,"claims":[{"src":"Tanaka","date":"Jun 4","text":"calls them a classic dark-horse, high variance"},{"src":"Tanaka","date":"Jun 3","text":"calls them a classic dark-horse, high variance"}],"trackNote":"Track record: well-calibrated historically (Brier 0.19)."},"rank":22,"netChange":0.7,"group":"C","injuries":[],"scenarios":[{"label":"Star striker fit","delta":0.9},{"label":"Key defender out","delta":-0.6}],"drivers":["Reaches R32 in 65% of sims","xG/90 1.31 on 8 matches","Up 0.7pp this run"]},{"id":"TUR","name":"Turkey","code":"TUR","flag":"🇹🇷","conf":"UEFA","win":0.00601353052513504,"fin":0.017934126134556628,"sf":0.049937841509828905,"qf":0.12896985216562412,"r16":0.3072678578971244,"r32":0.6725794517870289,"groupExit":0.32742054821297106,"xg":{"hasXg":true,"xg90":1.65,"xga90":0.65,"mp":3,"lowConf":true},"signal":{"value":0.4,"confidence":88,"eloAdj":12,"capped":false,"claims":[{"src":"Boateng","date":"Jun 4","text":"notes the defensive block is the best in years"},{"src":"Boateng","date":"Jun 5","text":"rates the press resistance as elite this cycle"}],"trackNote":"Track record: well-calibrated historically (Brier 0.19)."},"rank":23,"netChange":-0.3,"group":"D","injuries":[{"player":"M. Rossi","status":"Doubtful","tone":"clay","date":"Jun 2"}],"scenarios":[{"label":"Star striker fit","delta":1.6},{"label":"Key defender out","delta":-0.6}],"drivers":["Reaches R32 in 67% of sims","xG/90 1.65 on 3 matches","Down 0.3pp this run"]},{"id":"SRB","name":"Serbia","code":"SRB","flag":"🇷🇸","conf":"UEFA","win":0.005573175688568865,"fin":0.01687197214527733,"sf":0.04764905050938635,"qf":0.1247181849322359,"r16":0.30097275530412626,"r32":0.6669655607296071,"groupExit":0.3330344392703929,"xg":{"hasXg":true,"xg90":2.21,"xga90":1.41,"mp":10,"lowConf":false},"signal":{"value":0.73,"confidence":91,"eloAdj":22,"capped":false,"claims":[{"src":"Ortega","date":"Jun 5","text":"rates the press resistance as elite this cycle"},{"src":"Tanaka","date":"Jun 5","text":"sees a wide outcome range — could go either way"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":24,"netChange":0,"group":"E","injuries":[],"scenarios":[{"label":"Star striker fit","delta":0.7},{"label":"Key defender out","delta":-0.6}],"drivers":["Reaches R32 in 67% of sims","xG/90 2.21 on 10 matches","Flat vs last run"]},{"id":"NGA","name":"Nigeria","code":"NGA","flag":"🇳🇬","conf":"CAF","win":0.005029014872683674,"fin":0.015458152814481912,"sf":0.04428665427225281,"qf":0.11750178750026347,"r16":0.287264972607996,"r32":0.6445778610712031,"groupExit":0.3554221389287969,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":-0.6,"confidence":69,"eloAdj":-18,"capped":false,"claims":[{"src":"Tanaka","date":"Jun 5","text":"warns the back line is exposed in transition"},{"src":"Tanaka","date":"Jun 5","text":"questions squad depth past the first XI"}],"trackNote":"Track record: this source over-rated 2 of last 3 picks — discount applied."},"rank":25,"netChange":-0.1,"group":"K","injuries":[{"player":"J. Smith","status":"Returning","tone":"amber","date":"Jun 3"},{"player":"M. Rossi","status":"Late fitness test","tone":"amber","date":"Jun 4"}],"scenarios":[{"label":"Star striker fit","delta":1.7},{"label":"Key defender out","delta":-1.6}],"drivers":["Reaches R32 in 64% of sims","No xG data — baseline Elo only","Down 0.1pp this run"]},{"id":"UKR","name":"Ukraine","code":"UKR","flag":"🇺🇦","conf":"UEFA","win":0.004205559671827203,"fin":0.013336179662429025,"sf":0.03934367084224567,"qf":0.10732090682572099,"r16":0.2694193605855479,"r32":0.6200996096543923,"groupExit":0.37990039034560774,"xg":{"hasXg":true,"xg90":1.87,"xga90":0.69,"mp":9,"lowConf":false},"signal":{"value":0.75,"confidence":45,"eloAdj":23,"capped":false,"claims":[{"src":"Tanaka","date":"Jun 2","text":"expects a deep run on current form"},{"src":"Rossetti","date":"Jun 3","text":"expects a deep run on current form"}],"trackNote":"Track record: this source over-rated 2 of last 3 picks — discount applied."},"rank":26,"netChange":0.9,"group":"L","injuries":[{"player":"T. Okafor","status":"Doubtful","tone":"clay","date":"Jun 4"},{"player":"A. Khan","status":"Late fitness test","tone":"amber","date":"Jun 5"}],"scenarios":[{"label":"Star striker fit","delta":1},{"label":"Key defender out","delta":-2}],"drivers":["Reaches R32 in 62% of sims","xG/90 1.87 on 9 matches","Up 0.9pp this run"]},{"id":"KOR","name":"Korea Rep.","code":"KOR","flag":"🇰🇷","conf":"AFC","win":0.0038074102604027573,"fin":0.01226776049996844,"sf":0.0367379981937264,"qf":0.10164156739464848,"r16":0.2586338290062398,"r32":0.6030384648308448,"groupExit":0.3969615351691552,"xg":{"hasXg":true,"xg90":1.52,"xga90":1.03,"mp":8,"lowConf":false},"signal":{"value":0.5,"confidence":91,"eloAdj":15,"capped":false,"claims":[{"src":"Lindqvist","date":"Jun 5","text":"notes the defensive block is the best in years"},{"src":"Tanaka","date":"Jun 2","text":"rates them on talent but unproven vs elite"}],"trackNote":"Track record: this source over-rated 2 of last 3 picks — discount applied."},"rank":27,"netChange":0,"group":"A","injuries":[],"scenarios":[{"label":"Star striker fit","delta":1.5},{"label":"Key defender out","delta":-1.8}],"drivers":["Reaches R32 in 60% of sims","xG/90 1.52 on 8 matches","Flat vs last run"]},{"id":"NOR","name":"Norway","code":"NOR","flag":"🇳🇴","conf":"UEFA","win":0.003579725014856328,"fin":0.011722643694720408,"sf":0.03564359458321332,"qf":0.10003961416257483,"r16":0.25806904048218615,"r32":0.6096723316390645,"groupExit":0.39032766836093546,"xg":{"hasXg":true,"xg90":1.96,"xga90":0.99,"mp":6,"lowConf":false},"signal":{"value":0.03,"confidence":80,"eloAdj":1,"capped":false,"claims":[{"src":"Pearce","date":"Jun 2","text":"rates them on talent but unproven vs elite"},{"src":"Lindqvist","date":"Jun 3","text":"rates the press resistance as elite this cycle"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":28,"netChange":1.1,"group":"B","injuries":[{"player":"K. Bauer","status":"Late fitness test","tone":"amber","date":"Jun 3"}],"scenarios":[{"label":"Star striker fit","delta":1.7},{"label":"Key defender out","delta":-1.1}],"drivers":["Reaches R32 in 61% of sims","xG/90 1.96 on 6 matches","Up 1.1pp this run"]},{"id":"EGY","name":"Egypt","code":"EGY","flag":"🇪🇬","conf":"CAF","win":0.003158820920083914,"fin":0.010693833046305813,"sf":0.03354363151597928,"qf":0.09694937126082899,"r16":0.2571929246865524,"r32":0.6240953140910517,"groupExit":0.3759046859089483,"xg":{"hasXg":true,"xg90":1.97,"xga90":0.66,"mp":10,"lowConf":false},"signal":{"value":0.71,"confidence":85,"eloAdj":21,"capped":false,"claims":[{"src":"Ortega","date":"Jun 5","text":"notes the defensive block is the best in years"},{"src":"Pearce","date":"Jun 4","text":"rates the press resistance as elite this cycle"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":29,"netChange":0,"group":"C","injuries":[{"player":"G. Álvarez","status":"Late fitness test","tone":"amber","date":"Jun 3"},{"player":"G. Álvarez","status":"Fit","tone":"green","date":"Jun 2"}],"scenarios":[{"label":"Star striker fit","delta":0.8},{"label":"Key defender out","delta":-0.8}],"drivers":["Reaches R32 in 62% of sims","xG/90 1.97 on 10 matches","Flat vs last run"]},{"id":"AUS","name":"Australia","code":"AUS","flag":"🇦🇺","conf":"AFC","win":0.0028002086264072752,"fin":0.00964270691799874,"sf":0.030732452549512033,"qf":0.09016695129472929,"r16":0.24264221428514307,"r32":0.5968880302078856,"groupExit":0.4031119697921144,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":0.58,"confidence":37,"eloAdj":17,"capped":false,"claims":[{"src":"Lindqvist","date":"Jun 4","text":"rates the press resistance as elite this cycle"},{"src":"Boateng","date":"Jun 2","text":"expects a deep run on current form"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":30,"netChange":1.2,"group":"D","injuries":[{"player":"D. Silva","status":"Doubtful","tone":"clay","date":"Jun 3"},{"player":"N. Petrov","status":"Doubtful","tone":"clay","date":"Jun 2"},{"player":"R. Tanaka","status":"Out","tone":"clay","date":"Jun 4"}],"scenarios":[{"label":"Star striker fit","delta":0.9},{"label":"Key defender out","delta":-0.8}],"drivers":["Reaches R32 in 60% of sims","No xG data — baseline Elo only","Up 1.2pp this run"]},{"id":"CAN","name":"Canada","code":"CAN","flag":"🇨🇦","conf":"CONCACAF","win":0.0026339857866238122,"fin":0.009228911334597417,"sf":0.02989388791572362,"qf":0.08905269090134134,"r16":0.24314252148028498,"r32":0.6064629173342803,"groupExit":0.39353708266571974,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":0.31,"confidence":35,"eloAdj":9,"capped":false,"claims":[{"src":"Diallo","date":"Jun 3","text":"notes the defensive block is the best in years"},{"src":"Lindqvist","date":"Jun 5","text":"flags improved finishing under the new staff"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":31,"netChange":0.3,"group":"E","injuries":[],"scenarios":[{"label":"Star striker fit","delta":1},{"label":"Key defender out","delta":-1.9}],"drivers":["Reaches R32 in 61% of sims","No xG data — baseline Elo only","Up 0.3pp this run"]},{"id":"ALG","name":"Algeria","code":"ALG","flag":"🇩🇿","conf":"CAF","win":0.0023794492540106177,"fin":0.008485447943812764,"sf":0.02794191517972647,"qf":0.0845352021974613,"r16":0.23422807235036616,"r32":0.592493561388622,"groupExit":0.40750643861137803,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":-0.25,"confidence":74,"eloAdj":-7,"capped":false,"claims":[{"src":"Diallo","date":"Jun 5","text":"sees fatigue risk from a congested calendar"},{"src":"Ortega","date":"Jun 2","text":"rates them on talent but unproven vs elite"}],"trackNote":"Track record: this source over-rated 2 of last 3 picks — discount applied."},"rank":32,"netChange":1.2,"group":"F","injuries":[{"player":"D. Silva","status":"Fit","tone":"green","date":"Jun 5"}],"scenarios":[{"label":"Star striker fit","delta":1.4},{"label":"Key defender out","delta":-1.8}],"drivers":["Reaches R32 in 59% of sims","No xG data — baseline Elo only","Up 1.2pp this run"]},{"id":"IRN","name":"Iran","code":"IRN","flag":"🇮🇷","conf":"AFC","win":0.0020862350739423753,"fin":0.007574612673959087,"sf":0.02536360400462593,"qf":0.07794974268491774,"r16":0.21922943424644561,"r32":0.5625120764710547,"groupExit":0.4374879235289453,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":-0.87,"confidence":39,"eloAdj":-25,"capped":true,"claims":[{"src":"Lindqvist","date":"Jun 3","text":"sees fatigue risk from a congested calendar"},{"src":"Mendes","date":"Jun 3","text":"sees fatigue risk from a congested calendar"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":33,"netChange":-0.1,"group":"G","injuries":[{"player":"F. Costa","status":"Fit","tone":"green","date":"Jun 3"},{"player":"N. Petrov","status":"Late fitness test","tone":"amber","date":"Jun 5"},{"player":"L. Dubois","status":"Late fitness test","tone":"amber","date":"Jun 3"}],"scenarios":[{"label":"Star striker fit","delta":0.6},{"label":"Key defender out","delta":-1.7}],"drivers":["Reaches R32 in 56% of sims","No xG data — baseline Elo only","Down 0.1pp this run"]},{"id":"CIV","name":"Côte d’Ivoire","code":"CIV","flag":"🇨🇮","conf":"CAF","win":0.002028209568189661,"fin":0.007499831211504974,"sf":0.0255443528279044,"qf":0.07976820249813255,"r16":0.2277692285414697,"r32":0.5929332277247082,"groupExit":0.40706677227529176,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":-0.86,"confidence":43,"eloAdj":-25,"capped":true,"claims":[{"src":"Boateng","date":"Jun 2","text":"is skeptical of the keeper situation"},{"src":"Pearce","date":"Jun 3","text":"sees a wide outcome range — could go either way"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":34,"netChange":0.4,"group":"H","injuries":[],"scenarios":[{"label":"Star striker fit","delta":0.5},{"label":"Key defender out","delta":-1.1}],"drivers":["Reaches R32 in 59% of sims","No xG data — baseline Elo only","Up 0.4pp this run"]},{"id":"POL","name":"Poland","code":"POL","flag":"🇵🇱","conf":"UEFA","win":0.001790672743414841,"fin":0.00674596814707125,"sf":0.023378067678519642,"qf":0.07419713027409741,"r16":0.21514669738420517,"r32":0.5683491958089228,"groupExit":0.43165080419107715,"xg":{"hasXg":true,"xg90":1.74,"xga90":1.13,"mp":8,"lowConf":false},"signal":{"value":-0.68,"confidence":30,"eloAdj":-20,"capped":false,"claims":[{"src":"Pearce","date":"Jun 3","text":"sees fatigue risk from a congested calendar"},{"src":"Lindqvist","date":"Jun 3","text":"sees fatigue risk from a congested calendar"}],"trackNote":"Track record: this source over-rated 2 of last 3 picks — discount applied."},"rank":35,"netChange":0.4,"group":"I","injuries":[],"scenarios":[{"label":"Star striker fit","delta":1.7},{"label":"Key defender out","delta":-1.9}],"drivers":["Reaches R32 in 57% of sims","xG/90 1.74 on 8 matches","Up 0.4pp this run"]},{"id":"PAR","name":"Paraguay","code":"PAR","flag":"🇵🇾","conf":"CONMEBOL","win":0.0015541233485009023,"fin":0.006083575715941929,"sf":0.02184577451227017,"qf":0.0716779199765117,"r16":0.2144935456339426,"r32":0.5838775454816666,"groupExit":0.4161224545183334,"xg":{"hasXg":true,"xg90":1.51,"xga90":1.23,"mp":9,"lowConf":false},"signal":{"value":-0.08,"confidence":44,"eloAdj":-2,"capped":false,"claims":[{"src":"Pearce","date":"Jun 4","text":"sees a wide outcome range — could go either way"},{"src":"Pearce","date":"Jun 2","text":"warns the back line is exposed in transition"}],"trackNote":"Track record: this source over-rated 2 of last 3 picks — discount applied."},"rank":36,"netChange":0.5,"group":"J","injuries":[],"scenarios":[{"label":"Star striker fit","delta":1.4},{"label":"Key defender out","delta":-1.1}],"drivers":["Reaches R32 in 58% of sims","xG/90 1.51 on 9 matches","Up 0.5pp this run"]},{"id":"SCO","name":"Scotland","code":"SCO","flag":"🏴","conf":"UEFA","win":0.0013361851356530044,"fin":0.00533467875368531,"sf":0.019509667409999015,"qf":0.06511359199479708,"r16":0.19801870160416918,"r32":0.5473646776964275,"groupExit":0.4526353223035725,"xg":{"hasXg":true,"xg90":2.25,"xga90":0.69,"mp":5,"lowConf":true},"signal":{"value":-0.06,"confidence":55,"eloAdj":-2,"capped":false,"claims":[{"src":"Pearce","date":"Jun 5","text":"calls them a classic dark-horse, high variance"},{"src":"Boateng","date":"Jun 5","text":"sees fatigue risk from a congested calendar"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":37,"netChange":0.4,"group":"D","injuries":[{"player":"M. Rossi","status":"Doubtful","tone":"clay","date":"Jun 3"}],"scenarios":[{"label":"Star striker fit","delta":0.5},{"label":"Key defender out","delta":-0.6}],"drivers":["Reaches R32 in 55% of sims","xG/90 2.25 on 5 matches","Up 0.4pp this run"]},{"id":"KSA","name":"Saudi Arabia","code":"KSA","flag":"🇸🇦","conf":"AFC","win":0.0009758433899325077,"fin":0.004143714793682416,"sf":0.01604128003728836,"qf":0.05644964100074136,"r16":0.1804752338304741,"r32":0.523134594390323,"groupExit":0.47686540560967705,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":0.23,"confidence":41,"eloAdj":7,"capped":false,"claims":[{"src":"Tanaka","date":"Jun 5","text":"notes the defensive block is the best in years"},{"src":"Mendes","date":"Jun 4","text":"rates the press resistance as elite this cycle"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":38,"netChange":0,"group":"E","injuries":[{"player":"N. Petrov","status":"Returning","tone":"amber","date":"Jun 4"},{"player":"A. Khan","status":"Doubtful","tone":"clay","date":"Jun 5"}],"scenarios":[{"label":"Star striker fit","delta":0.8},{"label":"Key defender out","delta":-0.9}],"drivers":["Reaches R32 in 52% of sims","No xG data — baseline Elo only","Flat vs last run"]},{"id":"CMR","name":"Cameroon","code":"CMR","flag":"🇨🇲","conf":"CAF","win":0.0009164414683247477,"fin":0.0039757292081162715,"sf":0.015697278938972006,"qf":0.05625902814804627,"r16":0.18299432075969346,"r32":0.5391779178435686,"groupExit":0.4608220821564314,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":0.97,"confidence":64,"eloAdj":25,"capped":true,"claims":[{"src":"Ortega","date":"Jun 3","text":"flags improved finishing under the new staff"},{"src":"Diallo","date":"Jun 5","text":"sees a wide outcome range — could go either way"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":39,"netChange":0.6,"group":"F","injuries":[],"scenarios":[{"label":"Star striker fit","delta":0.7},{"label":"Key defender out","delta":-1.9}],"drivers":["Reaches R32 in 54% of sims","No xG data — baseline Elo only","Up 0.6pp this run"]},{"id":"PAN","name":"Panama","code":"PAN","flag":"🇵🇦","conf":"CONCACAF","win":0.0007000244985563021,"fin":0.0031743144214297437,"sf":0.013052616194620552,"qf":0.048574313240527654,"r16":0.16369254058062102,"r32":0.49874500476810696,"groupExit":0.501254995231893,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":0.39,"confidence":60,"eloAdj":12,"capped":false,"claims":[{"src":"Boateng","date":"Jun 2","text":"notes the defensive block is the best in years"},{"src":"Ortega","date":"Jun 3","text":"sees a wide outcome range — could go either way"}],"trackNote":"Track record: well-calibrated historically (Brier 0.19)."},"rank":40,"netChange":-1.1,"group":"G","injuries":[],"scenarios":[{"label":"Star striker fit","delta":0.5},{"label":"Key defender out","delta":-0.8}],"drivers":["Reaches R32 in 50% of sims","No xG data — baseline Elo only","Down 1.1pp this run"]},{"id":"GHA","name":"Ghana","code":"GHA","flag":"🇬🇭","conf":"CAF","win":0.0006777010218604601,"fin":0.0031442422837748975,"sf":0.01320261091562426,"qf":0.05009288757793627,"r16":0.17190788951205438,"r32":0.5328563959939009,"groupExit":0.4671436040060991,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":0.61,"confidence":48,"eloAdj":18,"capped":false,"claims":[{"src":"Ortega","date":"Jun 3","text":"expects a deep run on current form"},{"src":"Boateng","date":"Jun 5","text":"expects a deep run on current form"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":41,"netChange":1.2,"group":"H","injuries":[{"player":"A. Khan","status":"Doubtful","tone":"clay","date":"Jun 2"},{"player":"R. Tanaka","status":"Late fitness test","tone":"amber","date":"Jun 5"}],"scenarios":[{"label":"Star striker fit","delta":0.6},{"label":"Key defender out","delta":-1.3}],"drivers":["Reaches R32 in 53% of sims","No xG data — baseline Elo only","Up 1.2pp this run"]},{"id":"QAT","name":"Qatar","code":"QAT","flag":"🇶🇦","conf":"AFC","win":0.0005969217085737571,"fin":0.0028351059624857114,"sf":0.012161969561083697,"qf":0.04706447955943441,"r16":0.16453443410335655,"r32":0.5189988941156073,"groupExit":0.4810011058843927,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":0.13,"confidence":91,"eloAdj":4,"capped":false,"claims":[{"src":"Rossetti","date":"Jun 2","text":"sees a wide outcome range — could go either way"},{"src":"Mendes","date":"Jun 4","text":"notes the defensive block is the best in years"}],"trackNote":"Track record: thin history on this confederation — low weight."},"rank":42,"netChange":0,"group":"I","injuries":[],"scenarios":[{"label":"Star striker fit","delta":0.7},{"label":"Key defender out","delta":-0.6}],"drivers":["Reaches R32 in 52% of sims","No xG data — baseline Elo only","Flat vs last run"]},{"id":"TUN","name":"Tunisia","code":"TUN","flag":"🇹🇳","conf":"CAF","win":0.00047861626608248744,"fin":0.0023863366544547705,"sf":0.010699570108667584,"qf":0.043124784244062006,"r16":0.1566171490905163,"r32":0.5120943162194229,"groupExit":0.4879056837805771,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":-0.4,"confidence":74,"eloAdj":-12,"capped":false,"claims":[{"src":"Diallo","date":"Jun 3","text":"sees fatigue risk from a congested calendar"},{"src":"Rossetti","date":"Jun 2","text":"questions squad depth past the first XI"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":43,"netChange":0.4,"group":"J","injuries":[{"player":"N. Petrov","status":"Late fitness test","tone":"amber","date":"Jun 2"},{"player":"T. Okafor","status":"Out","tone":"clay","date":"Jun 3"},{"player":"M. Rossi","status":"Doubtful","tone":"clay","date":"Jun 4"}],"scenarios":[{"label":"Star striker fit","delta":1.4},{"label":"Key defender out","delta":-1.6}],"drivers":["Reaches R32 in 51% of sims","No xG data — baseline Elo only","Up 0.4pp this run"]},{"id":"CRC","name":"Costa Rica","code":"CRC","flag":"🇨🇷","conf":"CONCACAF","win":0.00036386985610608214,"fin":0.0019092358776402487,"sf":0.00896566378664716,"qf":0.037701962736675594,"r16":0.1424560303622756,"r32":0.48347483029160715,"groupExit":0.5165251697083928,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":-0.66,"confidence":90,"eloAdj":-20,"capped":false,"claims":[{"src":"Mendes","date":"Jun 4","text":"sees fatigue risk from a congested calendar"},{"src":"Pearce","date":"Jun 5","text":"calls them a classic dark-horse, high variance"}],"trackNote":"Track record: well-calibrated historically (Brier 0.19)."},"rank":44,"netChange":-0.6,"group":"K","injuries":[],"scenarios":[{"label":"Star striker fit","delta":1.4},{"label":"Key defender out","delta":-0.5}],"drivers":["Reaches R32 in 48% of sims","No xG data — baseline Elo only","Down 0.6pp this run"]},{"id":"IRQ","name":"Iraq","code":"IRQ","flag":"🇮🇶","conf":"AFC","win":0.00027241303087579795,"fin":0.0015083546387524753,"sf":0.007435137500219271,"qf":0.03268191514205692,"r16":0.12868817533121774,"r32":0.453983906199826,"groupExit":0.546016093800174,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":0.97,"confidence":83,"eloAdj":25,"capped":true,"claims":[{"src":"Ortega","date":"Jun 3","text":"expects a deep run on current form"},{"src":"Diallo","date":"Jun 2","text":"flags improved finishing under the new staff"}],"trackNote":"Track record: well-calibrated historically (Brier 0.19)."},"rank":45,"netChange":0.4,"group":"L","injuries":[{"player":"A. Khan","status":"Late fitness test","tone":"amber","date":"Jun 4"},{"player":"A. Khan","status":"Doubtful","tone":"clay","date":"Jun 4"}],"scenarios":[{"label":"Star striker fit","delta":1.2},{"label":"Key defender out","delta":-1.4}],"drivers":["Reaches R32 in 45% of sims","No xG data — baseline Elo only","Up 0.4pp this run"]},{"id":"UZB","name":"Uzbekistan","code":"UZB","flag":"🇺🇿","conf":"AFC","win":0.00021906127882429538,"fin":0.0012839017923598518,"sf":0.0066596872720630475,"qf":0.03066204116916882,"r16":0.12604259418100233,"r32":0.4629187544014287,"groupExit":0.5370812455985713,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":-0.27,"confidence":40,"eloAdj":-8,"capped":false,"claims":[{"src":"Ortega","date":"Jun 3","text":"sees fatigue risk from a congested calendar"},{"src":"Ortega","date":"Jun 2","text":"calls them a classic dark-horse, high variance"}],"trackNote":"Track record: well-calibrated historically (Brier 0.19)."},"rank":46,"netChange":0.7,"group":"A","injuries":[{"player":"N. Petrov","status":"Late fitness test","tone":"amber","date":"Jun 2"}],"scenarios":[{"label":"Star striker fit","delta":0.6},{"label":"Key defender out","delta":-1.6}],"drivers":["Reaches R32 in 46% of sims","No xG data — baseline Elo only","Up 0.7pp this run"]},{"id":"JAM","name":"Jamaica","code":"JAM","flag":"🇯🇲","conf":"CONCACAF","win":0.00016510505422957675,"fin":0.0010277936662202868,"sf":0.005625403334219159,"qf":0.0271899299214097,"r16":0.11690946665479908,"r32":0.4477714516278594,"groupExit":0.5522285483721405,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":-0.22,"confidence":52,"eloAdj":-7,"capped":false,"claims":[{"src":"Ortega","date":"Jun 5","text":"questions squad depth past the first XI"},{"src":"Ortega","date":"Jun 3","text":"warns the back line is exposed in transition"}],"trackNote":"Track record: tends to anchor on reputation, not form."},"rank":47,"netChange":-0.3,"group":"B","injuries":[{"player":"O. Berg","status":"Late fitness test","tone":"amber","date":"Jun 3"}],"scenarios":[{"label":"Star striker fit","delta":0.3},{"label":"Key defender out","delta":-1}],"drivers":["Reaches R32 in 45% of sims","No xG data — baseline Elo only","Down 0.3pp this run"]},{"id":"NZL","name":"New Zealand","code":"NZL","flag":"🇳🇿","conf":"OFC","win":0.000105972679342734,"fin":0.0007274925932793647,"sf":0.004341067946343591,"qf":0.022676159881829146,"r16":0.10472507861214314,"r32":0.4286520387239487,"groupExit":0.5713479612760513,"xg":{"hasXg":false,"xg90":null,"xga90":null,"mp":null,"lowConf":false},"signal":{"value":-0.48,"confidence":53,"eloAdj":-14,"capped":false,"claims":[{"src":"Lindqvist","date":"Jun 4","text":"warns the back line is exposed in transition"},{"src":"Ortega","date":"Jun 2","text":"calls them a classic dark-horse, high variance"}],"trackNote":"Track record: well-calibrated historically (Brier 0.19)."},"rank":48,"netChange":0,"group":"C","injuries":[],"scenarios":[{"label":"Star striker fit","delta":1.4},{"label":"Key defender out","delta":-0.5}],"drivers":["Reaches R32 in 43% of sims","No xG data — baseline Elo only","Flat vs last run"]}]};
+
+  </script>
+
+  <!-- Main app script with Babel -->
+  <script type="text/babel">
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyDXKDzB7FqUxpDyyyRsKX2jmnK4BlbyC_Q",
+      authDomain: "world-cupforecaster.firebaseapp.com",
+      projectId: "world-cupforecaster",
+      storageBucket: "world-cupforecaster.firebasestorage.app",
+      messagingSenderId: "618957536209",
+      appId: "1:618957536209:web:3117f422f2f281471bbef0",
+      measurementId: "G-JPF4N69DBS"
+    };
+
+    // Initialize Firebase
+    try {
+      firebase.initializeApp(firebaseConfig);
+    } catch(e) {
+      // Already initialized
+    }
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // Firebase Auth API
+    window.firebaseAuth = {
+      register: async (email, password) => {
+        return auth.createUserWithEmailAndPassword(email, password);
+      },
+      login: async (email, password) => {
+        return auth.signInWithEmailAndPassword(email, password);
+      },
+      logout: async () => {
+        return auth.signOut();
+      },
+      onAuthStateChanged: (callback) => {
+        return auth.onAuthStateChanged(callback);
+      },
+      getCurrentUser: () => auth.currentUser,
+    };
+
+    // Firebase Data API
+    window.firebaseData = {
+      createUserProfile: async (uid, email) => {
+        return db.collection("users").doc(uid).set({
+          email,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      },
+      getUserProfile: async (uid) => {
+        const snap = await db.collection("users").doc(uid).get();
+        return snap.exists ? snap.data() : null;
+      },
+      addToWatchlist: async (uid, teamCode, teamName) => {
+        return db.collection("users").doc(uid).collection("watchlist").add({
+          teamCode,
+          teamName,
+          addedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      },
+      removeFromWatchlist: async (uid, docId) => {
+        return db.collection("users").doc(uid).collection("watchlist").doc(docId).delete();
+      },
+      getWatchlist: async (uid) => {
+        const snap = await db.collection("users").doc(uid).collection("watchlist").get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      },
+      savePrediction: async (uid, teamCode, teamName, confidence) => {
+        return db.collection("users").doc(uid).collection("predictions").add({
+          teamCode,
+          teamName,
+          confidence,
+          savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      },
+      getPredictions: async (uid) => {
+        const snap = await db.collection("users").doc(uid).collection("predictions").get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      },
+      addFeedItem: async (uid, type, content, teamCode) => {
+        return db.collection("feed").add({
+          uid,
+          type,
+          content,
+          teamCode,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      },
+      getFeed: async (limit = 50) => {
+        const snap = await db.collection("feed").orderBy("timestamp", "desc").limit(limit).get();
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      },
+    };
+
+// Auth Screen Component
+(function() {
+  const { useState } = React;
+
+  window.AuthScreen = function({ onLoginSuccess }) {
+    const [mode, setMode] = useState("login"); // "login" or "register"
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [ageConfirmed, setAgeConfirmed] = useState(false);
+    const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      setError("");
+      setLoading(true);
+
+      try {
+        if (mode === "register") {
+          if (!ageConfirmed) {
+            setError("You must confirm you are 18+ to register");
+            setLoading(false);
+            return;
+          }
+          if (password !== confirmPassword) {
+            setError("Passwords do not match");
+            setLoading(false);
+            return;
+          }
+          const result = await window.firebaseAuth.register(email, password);
+          // Create user profile in Firestore
+          await window.firebaseData.createUserProfile(result.user.uid, email);
+        } else {
+          await window.firebaseAuth.login(email, password);
+        }
+        onLoginSuccess();
+      } catch (err) {
+        setError(err.message || "Authentication failed");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    return (
+      <div style={authScreenStyles.container}>
+        <div style={authScreenStyles.card}>
+          <div style={authScreenStyles.logo}>🏆</div>
+          <h1 style={authScreenStyles.title}>World Cup Forecaster</h1>
+          
+          <form onSubmit={handleSubmit} style={authScreenStyles.form}>
+            <div style={authScreenStyles.inputGroup}>
+              <label style={authScreenStyles.label}>Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your@email.com"
+                required
+                style={authScreenStyles.input}
+              />
+            </div>
+
+            <div style={authScreenStyles.inputGroup}>
+              <label style={authScreenStyles.label}>Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                style={authScreenStyles.input}
+              />
+            </div>
+
+            {mode === "register" && (
+              <div style={authScreenStyles.inputGroup}>
+                <label style={authScreenStyles.label}>Confirm Password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  style={authScreenStyles.input}
+                />
+              </div>
+            )}
+
+            {mode === "register" && (
+              <div style={authScreenStyles.checkboxGroup}>
+                <input
+                  type="checkbox"
+                  checked={ageConfirmed}
+                  onChange={(e) => setAgeConfirmed(e.target.checked)}
+                  id="ageCheck"
+                  style={authScreenStyles.checkbox}
+                />
+                <label htmlFor="ageCheck" style={authScreenStyles.checkboxLabel}>
+                  I confirm I am 18 years old or older
+                </label>
+              </div>
+            )}
+
+            {error && <div style={authScreenStyles.error}>{error}</div>}
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                ...authScreenStyles.button,
+                opacity: loading ? 0.6 : 1,
+              }}
+            >
+              {loading ? "Loading..." : mode === "login" ? "Sign In" : "Create Account"}
+            </button>
+          </form>
+
+          <div style={authScreenStyles.toggle}>
+            {mode === "login" ? (
+              <>
+                Don't have an account?{" "}
+                <button
+                  onClick={() => setMode("register")}
+                  style={authScreenStyles.toggleButton}
+                >
+                  Register
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button
+                  onClick={() => setMode("login")}
+                  style={authScreenStyles.toggleButton}
+                >
+                  Sign In
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const authScreenStyles = {
+    container: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: "100vh",
+      background: "#0a0f0e",
+      padding: "20px",
+      fontFamily: "'IBM Plex Sans', sans-serif",
+    },
+    card: {
+      background: "#141a18",
+      border: "1px solid #2a3229",
+      borderRadius: "12px",
+      padding: "40px",
+      maxWidth: "400px",
+      width: "100%",
+      boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+    },
+    logo: {
+      fontSize: "48px",
+      textAlign: "center",
+      marginBottom: "20px",
+    },
+    title: {
+      color: "#e9e7dd",
+      fontSize: "24px",
+      fontWeight: "600",
+      textAlign: "center",
+      marginBottom: "30px",
+      margin: "0 0 30px 0",
+    },
+    form: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "20px",
+    },
+    inputGroup: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "8px",
+    },
+    label: {
+      color: "#b8b5a8",
+      fontSize: "14px",
+      fontWeight: "500",
+    },
+    input: {
+      background: "#0a0f0e",
+      border: "1px solid #2a3229",
+      borderRadius: "6px",
+      padding: "12px",
+      color: "#e9e7dd",
+      fontSize: "14px",
+      fontFamily: "'IBM Plex Sans', sans-serif",
+      boxSizing: "border-box",
+    },
+    checkboxGroup: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: "10px",
+    },
+    checkbox: {
+      marginTop: "4px",
+      cursor: "pointer",
+    },
+    checkboxLabel: {
+      color: "#b8b5a8",
+      fontSize: "14px",
+      cursor: "pointer",
+    },
+    error: {
+      background: "#d2685a",
+      color: "#fff",
+      padding: "12px",
+      borderRadius: "6px",
+      fontSize: "14px",
+    },
+    button: {
+      background: "#e3b341",
+      color: "#0a0f0e",
+      border: "none",
+      borderRadius: "6px",
+      padding: "12px",
+      fontSize: "16px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "opacity 0.2s",
+    },
+    toggle: {
+      textAlign: "center",
+      marginTop: "20px",
+      color: "#b8b5a8",
+      fontSize: "14px",
+    },
+    toggleButton: {
+      background: "none",
+      border: "none",
+      color: "#e3b341",
+      cursor: "pointer",
+      fontSize: "14px",
+      fontWeight: "600",
+      textDecoration: "underline",
+    },
+  };
+})();
+
+// Help Screen Component
+(function() {
+  const { useState } = React;
+
+  window.HelpScreen = function() {
+    const [expanded, setExpanded] = useState(null);
+
+    const faqs = [
+      {
+        id: "forecast",
+        title: "What's a forecast?",
+        answer: "A forecast is a prediction about what will happen in the future. This app predicts which teams will win the World Cup, and how likely each outcome is. It's like an educated guess based on real data — not magic!",
+      },
+      {
+        id: "percentage",
+        title: "Why do we use percentages?",
+        answer: "A percentage tells you how likely something is to happen. 50% means it could go either way. 10% means it's unlikely but possible. 1% means it's very rare. Our forecast shows each team's percentage chance of winning.",
+      },
+      {
+        id: "xg",
+        title: "What's xG?",
+        answer: "xG stands for 'expected goals.' It measures how many goals a team should score based on the quality of their chances. A shot from 5 meters away has high xG; a shot from 40 meters has low xG. Teams with high xG usually score more goals.",
+      },
+      {
+        id: "elo",
+        title: "What's Elo?",
+        answer: "Elo is a number that rates how strong a team is. Higher Elo = stronger team. It goes up when you win and down when you lose. It's named after a chess player who invented it!",
+      },
+      {
+        id: "null",
+        title: "What does 'baseline only' mean?",
+        answer: "Some teams don't have enough game data yet (like host countries in early tournaments). 'Baseline only' means we're making a guess based on team strength alone, without detailed shot data. It's less precise, but still reasonable.",
+      },
+      {
+        id: "confidence",
+        title: "What's a 'confidence' number?",
+        answer: "Confidence shows how sure we are about a prediction. High confidence (90%+) means we have a lot of data backing it up. Low confidence (50-70%) means we're less certain, so treat it more cautiously.",
+      },
+      {
+        id: "signal",
+        title: "What's 'signal' from pundits?",
+        answer: "Signal is what expert analysts think. They might say a team is 'hot' (green) or 'struggling' (red). We include their opinions but cap their influence so data still matters more than hype.",
+      },
+      {
+        id: "scenario",
+        title: "What are 'scenarios'?",
+        answer: "Scenarios show how a team's chances change if something happens — like a star player getting injured or returning from injury. It's 'what if?' analysis.",
+      },
+      {
+        id: "accuracy",
+        title: "How accurate is this?",
+        answer: "Our model is pretty good, but it's not perfect. Real soccer is chaotic! Luck, injuries, and referee calls matter. Treat these forecasts as educated guesses, not certainties.",
+      },
+      {
+        id: "data",
+        title: "Where does the data come from?",
+        answer: "We use real match data: shooting statistics (xG), team strength ratings (Elo), current injuries, and expert opinions. We run a simulation 100,000+ times to get probability ranges.",
+      },
+    ];
+
+    return (
+      <div style={helpStyles.container}>
+        <div style={helpStyles.header}>
+          <h2 style={helpStyles.title}>How This Works</h2>
+          <p style={helpStyles.subtitle}>
+            Understanding World Cup forecasts in plain English
+          </p>
+        </div>
+
+        <div style={helpStyles.faqList}>
+          {faqs.map((faq) => (
+            <div key={faq.id} style={helpStyles.faqItem}>
+              <button
+                onClick={() => setExpanded(expanded === faq.id ? null : faq.id)}
+                style={{
+                  ...helpStyles.faqButton,
+                  borderBottom: expanded === faq.id ? "1px solid #2a3229" : "1px solid #1a1f1d",
+                }}
+              >
+                <span style={helpStyles.faqTitle}>{faq.title}</span>
+                <span style={helpStyles.faqToggle}>
+                  {expanded === faq.id ? "−" : "+"}
+                </span>
+              </button>
+              {expanded === faq.id && (
+                <div style={helpStyles.faqAnswer}>{faq.answer}</div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div style={helpStyles.footer}>
+          <p style={helpStyles.footerText}>
+            <strong>Remember:</strong> These forecasts are based on past data and 
+            probability. Soccer is unpredictable, so treat these as educated guesses, 
+            not guarantees!
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  const helpStyles = {
+    container: {
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+      padding: "20px",
+      overflow: "auto",
+      color: "#e9e7dd",
+      fontFamily: "'IBM Plex Sans', sans-serif",
+    },
+    header: {
+      marginBottom: "24px",
+      paddingBottom: "20px",
+      borderBottom: "1px solid #2a3229",
+    },
+    title: {
+      fontSize: "28px",
+      fontWeight: "600",
+      margin: "0 0 8px 0",
+      color: "#e3b341",
+    },
+    subtitle: {
+      fontSize: "14px",
+      color: "#b8b5a8",
+      margin: "0",
+    },
+    faqList: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "0",
+      flex: 1,
+    },
+    faqItem: {
+      borderBottom: "1px solid #1a1f1d",
+    },
+    faqButton: {
+      background: "none",
+      border: "none",
+      padding: "16px 0",
+      cursor: "pointer",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      width: "100%",
+      textAlign: "left",
+      transition: "background 0.2s",
+    },
+    faqTitle: {
+      fontSize: "15px",
+      fontWeight: "500",
+      color: "#e9e7dd",
+    },
+    faqToggle: {
+      fontSize: "20px",
+      color: "#e3b341",
+      fontWeight: "300",
+    },
+    faqAnswer: {
+      fontSize: "14px",
+      color: "#b8b5a8",
+      padding: "0 0 16px 0",
+      lineHeight: "1.6",
+    },
+    footer: {
+      marginTop: "24px",
+      paddingTop: "20px",
+      borderTop: "1px solid #2a3229",
+    },
+    footerText: {
+      fontSize: "13px",
+      color: "#b8b5a8",
+      lineHeight: "1.6",
+      margin: "0",
+    },
+  };
+})();
+
+// Betting Advice Screen
+(function() {
+  const { useState, useEffect } = React;
+
+  window.BettingAdviceScreen = function({ teams, userId }) {
+    const [selectedConfidence, setSelectedConfidence] = useState("high");
+
+    if (!teams || teams.length === 0) {
+      return <div style={bettingStyles.container}><p>Loading...</p></div>;
+    }
+
+    // Calculate betting value picks
+    const getValuePicks = () => {
+      // Teams with high win% but potentially underpriced
+      return teams
+        .filter(t => t.win > 0.05) // At least 5% chance
+        .sort((a, b) => b.win - a.win)
+        .slice(0, 5)
+        .map(t => ({
+          team: t,
+          angle: t.win > 0.10 ? "Favorite with value" : "Dark horse potential",
+          reasoning: [
+            t.netChange > 0 ? `Trending up (+${t.netChange}pp this week)` : null,
+            t.xg?.hasXg ? `Strong xG (${t.xg.xg90.toFixed(2)}/90)` : "Baseline-only (less volatile)",
+            t.signal?.value > 0 ? "Expert consensus positive" : null,
+          ].filter(Boolean),
+          riskLevel: t.win > 0.12 ? "Low" : t.win > 0.08 ? "Medium" : "High",
+        }));
+    };
+
+    // Risky underdogs with potential
+    const getUnderdogPicks = () => {
+      return teams
+        .filter(t => t.win > 0.01 && t.win < 0.08)
+        .sort((a, b) => b.netChange - a.netChange)
+        .slice(0, 4)
+        .map(t => ({
+          team: t,
+          angle: "Contrarian pick / Long shot",
+          reasoning: [
+            t.netChange > 1 ? `Big week (+${t.netChange}pp — something changed)` : null,
+            t.injuries?.length === 0 ? "No major injuries" : `${t.injuries?.length || 0} injuries to watch`,
+            t.signal?.value > 0.5 ? "Expert bullish" : null,
+          ].filter(Boolean),
+          riskLevel: "High",
+          odds: "Long odds, high payout",
+        }));
+    };
+
+    // Favorites to avoid (crowded)
+    const getAvoidPicks = () => {
+      return teams
+        .filter(t => t.win > 0.11)
+        .sort((a, b) => b.win - a.win)
+        .slice(0, 3)
+        .map(t => ({
+          team: t,
+          angle: "Consensus pick (worse odds)",
+          reasoning: [
+            "Market has priced this in",
+            "Crowd is betting them",
+            "Lower implied payout despite high win%",
+          ],
+          riskLevel: "Low probability but low payout",
+        }));
+    };
+
+    const valuePicks = getValuePicks();
+    const underdogPicks = getUnderdogPicks();
+    const avoidPicks = getAvoidPicks();
+
+    return (
+      <div style={bettingStyles.container}>
+        <h2 style={bettingStyles.title}>Betting Strategy</h2>
+        <p style={bettingStyles.subtitle}>
+          Based on forecast data (not financial advice)
+        </p>
+
+        {/* Best Value Picks */}
+        <section style={bettingStyles.section}>
+          <h3 style={bettingStyles.sectionTitle}>💰 Best Value Picks</h3>
+          <p style={bettingStyles.sectionDescription}>
+            Teams with strong win probability but potentially underpriced in sportsbooks
+          </p>
+          <div style={bettingStyles.picksList}>
+            {valuePicks.map((pick, i) => (
+              <div key={pick.team.code} style={bettingStyles.pickCard}>
+                <div style={bettingStyles.pickHeader}>
+                  <span style={bettingStyles.flag}>{pick.team.flag}</span>
+                  <div style={{flex: 1}}>
+                    <div style={bettingStyles.teamName}>{pick.team.name}</div>
+                    <div style={bettingStyles.angle}>{pick.angle}</div>
+                  </div>
+                  <div style={bettingStyles.winPercent}>{pick.team.win.toFixed(1)}%</div>
+                </div>
+                <div style={bettingStyles.reasoning}>
+                  {pick.reasoning.map((r, j) => (
+                    <div key={j} style={bettingStyles.reasoningItem}>• {r}</div>
+                  ))}
+                </div>
+                <div style={{...bettingStyles.riskBadge, background: pick.riskLevel === "Low" ? "#1a2820" : "#2a1f1a"}}>
+                  Risk: {pick.riskLevel}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Underdog Potential */}
+        <section style={bettingStyles.section}>
+          <h3 style={bettingStyles.sectionTitle}>🎯 Contrarian Picks (Long Odds)</h3>
+          <p style={bettingStyles.sectionDescription}>
+            Underdogs trending up — higher risk, higher payout if they hit
+          </p>
+          <div style={bettingStyles.picksList}>
+            {underdogPicks.map((pick, i) => (
+              <div key={pick.team.code} style={{...bettingStyles.pickCard, borderColor: "#d2685a"}}>
+                <div style={bettingStyles.pickHeader}>
+                  <span style={bettingStyles.flag}>{pick.team.flag}</span>
+                  <div style={{flex: 1}}>
+                    <div style={bettingStyles.teamName}>{pick.team.name}</div>
+                    <div style={bettingStyles.angle}>{pick.angle}</div>
+                  </div>
+                  <div style={{...bettingStyles.winPercent, color: "#d2685a"}}>{pick.team.win.toFixed(1)}%</div>
+                </div>
+                <div style={bettingStyles.reasoning}>
+                  {pick.reasoning.map((r, j) => (
+                    <div key={j} style={bettingStyles.reasoningItem}>• {r}</div>
+                  ))}
+                </div>
+                <div style={{...bettingStyles.riskBadge, background: "#2a1f1a", borderColor: "#d2685a"}}>
+                  ⚠️ High risk, high reward
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Favorites to Avoid */}
+        <section style={bettingStyles.section}>
+          <h3 style={bettingStyles.sectionTitle}>⛔ Consensus Favorites (Skip)</h3>
+          <p style={bettingStyles.sectionDescription}>
+            Everyone's betting these — odds are already bad
+          </p>
+          <div style={bettingStyles.picksList}>
+            {avoidPicks.map((pick, i) => (
+              <div key={pick.team.code} style={{...bettingStyles.pickCard, opacity: 0.7}}>
+                <div style={bettingStyles.pickHeader}>
+                  <span style={bettingStyles.flag}>{pick.team.flag}</span>
+                  <div style={{flex: 1}}>
+                    <div style={bettingStyles.teamName}>{pick.team.name}</div>
+                    <div style={bettingStyles.angle}>{pick.angle}</div>
+                  </div>
+                  <div style={bettingStyles.winPercent}>{pick.team.win.toFixed(1)}%</div>
+                </div>
+                <div style={bettingStyles.reasoning}>
+                  {pick.reasoning.map((r, j) => (
+                    <div key={j} style={bettingStyles.reasoningItem}>• {r}</div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Strategy Tips */}
+        <section style={bettingStyles.section}>
+          <h3 style={bettingStyles.sectionTitle}>💡 Strategy Tips</h3>
+          <div style={bettingStyles.tipsBox}>
+            <div style={bettingStyles.tip}>
+              <strong>Implied Odds:</strong> Convert win% to decimal odds (100 / %) and compare to sportsbook. Higher decimal = better value.
+            </div>
+            <div style={bettingStyles.tip}>
+              <strong>Watch for Line Movement:</strong> If sportsbooks haven't updated odds after our latest sim, teams trending up are underpriced.
+            </div>
+            <div style={bettingStyles.tip}>
+              <strong>Parlay Caution:</strong> Combining picks increases payout but reduces win probability exponentially. Stick to 2-team parlays max.
+            </div>
+            <div style={bettingStyles.tip}>
+              <strong>Injury Updates:</strong> Check the Teams tab — a star player out can swing odds dramatically. Our model updates weekly.
+            </div>
+            <div style={bettingStyles.tip}>
+              <strong>Baseline-Only Teams:</strong> Spain, France, hosts have no xG data — higher uncertainty. Skip unless you have strong conviction.
+            </div>
+          </div>
+        </section>
+
+        <div style={bettingStyles.disclaimer}>
+          ⚠️ <strong>Disclaimer:</strong> This is educational analysis, not financial advice. Betting involves risk of loss. Only bet what you can afford to lose.
+        </div>
+      </div>
+    );
+  };
+
+  const bettingStyles = {
+    container: {
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+      padding: "20px",
+      overflow: "auto",
+      color: "#e9e7dd",
+      fontFamily: "'IBM Plex Sans', sans-serif",
+    },
+    title: {
+      fontSize: "28px",
+      fontWeight: "600",
+      margin: "0 0 8px 0",
+      color: "#e3b341",
+    },
+    subtitle: {
+      fontSize: "13px",
+      color: "#b8b5a8",
+      margin: "0 0 24px 0",
+    },
+    section: {
+      marginBottom: "28px",
+    },
+    sectionTitle: {
+      fontSize: "18px",
+      fontWeight: "600",
+      margin: "0 0 6px 0",
+      color: "#e9e7dd",
+    },
+    sectionDescription: {
+      fontSize: "13px",
+      color: "#b8b5a8",
+      margin: "0 0 12px 0",
+    },
+    picksList: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+    },
+    pickCard: {
+      background: "#141a18",
+      border: "1px solid #2a3229",
+      borderRadius: "8px",
+      padding: "16px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px",
+    },
+    pickHeader: {
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+    },
+    flag: {
+      fontSize: "28px",
+    },
+    teamName: {
+      fontSize: "14px",
+      fontWeight: "600",
+      color: "#e9e7dd",
+    },
+    angle: {
+      fontSize: "12px",
+      color: "#e3b341",
+      fontWeight: "500",
+    },
+    winPercent: {
+      fontSize: "20px",
+      fontWeight: "600",
+      color: "#46b87a",
+      minWidth: "60px",
+      textAlign: "right",
+    },
+    reasoning: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "4px",
+    },
+    reasoningItem: {
+      fontSize: "12px",
+      color: "#b8b5a8",
+      lineHeight: "1.4",
+    },
+    riskBadge: {
+      fontSize: "11px",
+      color: "#b8b5a8",
+      padding: "6px 10px",
+      borderRadius: "4px",
+      border: "1px solid #2a3229",
+      fontWeight: "500",
+    },
+    tipsBox: {
+      background: "#141a18",
+      border: "1px solid #2a3229",
+      borderRadius: "8px",
+      padding: "16px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+    },
+    tip: {
+      fontSize: "13px",
+      color: "#b8b5a8",
+      lineHeight: "1.6",
+    },
+    disclaimer: {
+      background: "#2a1f1a",
+      border: "1px solid #d2685a",
+      borderRadius: "6px",
+      padding: "12px",
+      fontSize: "12px",
+      color: "#d2685a",
+      marginTop: "24px",
+      lineHeight: "1.5",
+    },
+  };
+})();
+
+// Personalization Screens
+(function() {
+  const { useState, useEffect } = React;
+
+  // Watchlist Screen
+  window.WatchlistScreen = function({ teams, userId }) {
+    const [watchlist, setWatchlist] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      if (!userId) return;
+      window.firebaseData.getWatchlist(userId).then(items => {
+        setWatchlist(items);
+        setLoading(false);
+      });
+    }, [userId]);
+
+    const toggleWatchlist = async (team) => {
+      const existing = watchlist.find(w => w.teamCode === team.code);
+      if (existing) {
+        await window.firebaseData.removeFromWatchlist(userId, existing.id);
+        setWatchlist(watchlist.filter(w => w.id !== existing.id));
+      } else {
+        await window.firebaseData.addToWatchlist(userId, team.code, team.name);
+        setWatchlist([...watchlist, { teamCode: team.code, teamName: team.name }]);
+      }
+    };
+
+    const watchlistCodes = new Set(watchlist.map(w => w.teamCode));
+    const watchedTeams = teams.filter(t => watchlistCodes.has(t.code));
+
+    return (
+      <div style={personalizationStyles.container}>
+        <h2 style={personalizationStyles.title}>My Watchlist</h2>
+        {watchedTeams.length > 0 ? (
+          <div style={personalizationStyles.list}>
+            {watchedTeams.map(team => (
+              <div key={team.code} style={personalizationStyles.row}>
+                <div style={personalizationStyles.teamInfo}>
+                  <span style={personalizationStyles.flag}>{team.flag}</span>
+                  <div>
+                    <div style={personalizationStyles.teamName}>{team.name}</div>
+                    <div style={personalizationStyles.win}>Winner: {team.win.toFixed(1)}%</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => toggleWatchlist(team)}
+                  style={{...personalizationStyles.button, background: "#46b87a"}}
+                >
+                  ✓ Watching
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={personalizationStyles.empty}>
+            <p>No teams in your watchlist yet</p>
+            <p style={{fontSize: "13px", color: "#b8b5a8"}}>
+              Tap the heart icon on any team to add it
+            </p>
+          </div>
+        )}
+
+        <h3 style={personalizationStyles.subheading}>Browse teams to watch</h3>
+        <div style={personalizationStyles.grid}>
+          {teams.slice(0, 12).map(team => {
+            const isWatched = watchlistCodes.has(team.code);
+            return (
+              <button
+                key={team.code}
+                onClick={() => toggleWatchlist(team)}
+                style={{
+                  ...personalizationStyles.teamCard,
+                  background: isWatched ? "#1a2820" : "#141a18",
+                  borderColor: isWatched ? "#46b87a" : "#2a3229",
+                }}
+              >
+                <span style={{fontSize: "24px"}}>{team.flag}</span>
+                <div style={{fontSize: "12px"}}>{team.name}</div>
+                <div style={{fontSize: "11px", color: isWatched ? "#46b87a" : "#b8b5a8"}}>
+                  {isWatched ? "★ Watching" : "+ Add"}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // My Prediction Screen
+  window.MyPredictionScreen = function({ teams, userId }) {
+    const [predictions, setPredictions] = useState([]);
+    const [selectedTeam, setSelectedTeam] = useState(null);
+    const [confidence, setConfidence] = useState(50);
+
+    useEffect(() => {
+      if (!userId) return;
+      window.firebaseData.getPredictions(userId).then(items => {
+        setPredictions(items);
+        if (items.length > 0) setSelectedTeam(items[0].teamCode);
+      });
+    }, [userId]);
+
+    const savePrediction = async () => {
+      if (!selectedTeam) return;
+      const team = teams.find(t => t.code === selectedTeam);
+      await window.firebaseData.savePrediction(userId, selectedTeam, team.name, confidence);
+      await window.firebaseData.addFeedItem(userId, "prediction", `Predicted ${team.name} to win`, selectedTeam);
+      setPredictions([{ teamCode: selectedTeam, teamName: team.name, confidence }]);
+    };
+
+    const myPrediction = predictions.length > 0 ? predictions[0] : null;
+
+    return (
+      <div style={personalizationStyles.container}>
+        <h2 style={personalizationStyles.title}>My Prediction</h2>
+        
+        {myPrediction ? (
+          <div style={personalizationStyles.predictionBox}>
+            <p style={{fontSize: "13px", color: "#b8b5a8"}}>Your World Cup Winner Pick:</p>
+            <div style={personalizationStyles.predictionTeam}>
+              <span style={{fontSize: "32px"}}>{teams.find(t => t.code === myPrediction.teamCode)?.flag}</span>
+              <div>
+                <div style={personalizationStyles.teamName}>{myPrediction.teamName}</div>
+                <div style={personalizationStyles.confidence}>Confidence: {myPrediction.confidence}%</div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p style={personalizationStyles.empty}>You haven't made a prediction yet</p>
+        )}
+
+        <div style={personalizationStyles.form}>
+          <label style={personalizationStyles.label}>Pick your winner:</label>
+          <select
+            value={selectedTeam || ""}
+            onChange={(e) => setSelectedTeam(e.target.value)}
+            style={personalizationStyles.select}
+          >
+            <option value="">Choose a team...</option>
+            {teams.map(team => (
+              <option key={team.code} value={team.code}>
+                {team.name} ({team.win.toFixed(1)}%)
+              </option>
+            ))}
+          </select>
+
+          <div style={{marginTop: "20px"}}>
+            <label style={personalizationStyles.label}>
+              How confident are you? {confidence}%
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={confidence}
+              onChange={(e) => setConfidence(parseInt(e.target.value))}
+              style={{width: "100%", marginTop: "8px"}}
+            />
+          </div>
+
+          <button onClick={savePrediction} style={personalizationStyles.saveButton}>
+            Save Prediction
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Live Feed Screen
+  window.LiveFeedScreen = function({ userId }) {
+    const [feedItems, setFeedItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      window.firebaseData.getFeed().then(items => {
+        setFeedItems(items);
+        setLoading(false);
+      });
+    }, []);
+
+    return (
+      <div style={personalizationStyles.container}>
+        <h2 style={personalizationStyles.title}>Live Feed</h2>
+        {loading ? (
+          <p style={personalizationStyles.empty}>Loading feed...</p>
+        ) : feedItems.length > 0 ? (
+          <div style={personalizationStyles.feedList}>
+            {feedItems.map(item => (
+              <div key={item.id} style={personalizationStyles.feedItem}>
+                <div style={personalizationStyles.feedType}>{item.type}</div>
+                <p style={personalizationStyles.feedContent}>{item.content}</p>
+                <div style={personalizationStyles.feedTime}>
+                  {item.timestamp ? new Date(item.timestamp.toMillis()).toLocaleDateString() : "just now"}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={personalizationStyles.empty}>No feed items yet</p>
+        )}
+      </div>
+    );
+  };
+
+  const personalizationStyles = {
+    container: {
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+      padding: "20px",
+      overflow: "auto",
+      color: "#e9e7dd",
+      fontFamily: "'IBM Plex Sans', sans-serif",
+    },
+    title: {
+      fontSize: "24px",
+      fontWeight: "600",
+      margin: "0 0 20px 0",
+      color: "#e3b341",
+    },
+    subheading: {
+      fontSize: "16px",
+      fontWeight: "500",
+      margin: "20px 0 12px 0",
+      color: "#e9e7dd",
+    },
+    list: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+      marginBottom: "20px",
+    },
+    row: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "12px",
+      background: "#141a18",
+      borderRadius: "6px",
+      border: "1px solid #2a3229",
+    },
+    teamInfo: {
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      flex: 1,
+    },
+    flag: {
+      fontSize: "24px",
+    },
+    teamName: {
+      fontSize: "14px",
+      fontWeight: "500",
+    },
+    win: {
+      fontSize: "12px",
+      color: "#e3b341",
+    },
+    button: {
+      padding: "6px 12px",
+      border: "none",
+      borderRadius: "4px",
+      color: "#0a0f0e",
+      fontSize: "12px",
+      fontWeight: "600",
+      cursor: "pointer",
+    },
+    empty: {
+      textAlign: "center",
+      padding: "40px 20px",
+      color: "#b8b5a8",
+      fontSize: "14px",
+    },
+    grid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(3, 1fr)",
+      gap: "10px",
+    },
+    teamCard: {
+      background: "#141a18",
+      border: "1px solid #2a3229",
+      borderRadius: "8px",
+      padding: "12px 8px",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "6px",
+      cursor: "pointer",
+      transition: "all 0.2s",
+    },
+    predictionBox: {
+      background: "#141a18",
+      border: "1px solid #2a3229",
+      borderRadius: "8px",
+      padding: "20px",
+      marginBottom: "20px",
+    },
+    predictionTeam: {
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      marginTop: "12px",
+    },
+    confidence: {
+      fontSize: "12px",
+      color: "#e3b341",
+    },
+    form: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+      background: "#141a18",
+      border: "1px solid #2a3229",
+      borderRadius: "8px",
+      padding: "20px",
+    },
+    label: {
+      fontSize: "13px",
+      color: "#b8b5a8",
+      fontWeight: "500",
+    },
+    select: {
+      background: "#0a0f0e",
+      border: "1px solid #2a3229",
+      borderRadius: "4px",
+      padding: "8px",
+      color: "#e9e7dd",
+      fontSize: "14px",
+      fontFamily: "'IBM Plex Sans', sans-serif",
+    },
+    saveButton: {
+      background: "#e3b341",
+      color: "#0a0f0e",
+      border: "none",
+      borderRadius: "4px",
+      padding: "10px",
+      fontSize: "14px",
+      fontWeight: "600",
+      cursor: "pointer",
+      marginTop: "12px",
+    },
+    feedList: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+    },
+    feedItem: {
+      background: "#141a18",
+      border: "1px solid #2a3229",
+      borderRadius: "6px",
+      padding: "12px",
+    },
+    feedType: {
+      fontSize: "11px",
+      color: "#e3b341",
+      fontWeight: "600",
+      textTransform: "uppercase",
+    },
+    feedContent: {
+      fontSize: "14px",
+      margin: "8px 0",
+    },
+    feedTime: {
+      fontSize: "12px",
+      color: "#b8b5a8",
+    },
+  };
+})();
+
+// Main App with Auth + Personalization
+(function() {
+  const { useState, useEffect } = React;
+
+  window.AppWithAuth = function() {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [currentTab, setCurrentTab] = useState("forecast");
+    const [selectedTeam, setSelectedTeam] = useState(null);
+    const [teamsData, setTeamsData] = useState([]);
+
+    // Load data
+    useEffect(() => {
+      if (window.appData && window.appData.teams) {
+        setTeamsData(window.appData.teams);
+      }
+    }, []);
+
+    // Check auth state
+    useEffect(() => {
+      if (!window.firebaseAuth) {
+        setLoading(false);
+        return;
+      }
+
+      const unsubscribe = window.firebaseAuth.onAuthStateChanged((currentUser) => {
+        setUser(currentUser);
+        setLoading(false);
+      });
+
+      return unsubscribe;
+    }, []);
+
+    const handleLogout = async () => {
+      await window.firebaseAuth.logout();
+      setUser(null);
+      setCurrentTab("forecast");
+    };
+
+    if (loading) {
+      return (
+        <div style={{...appStyles.container, justifyContent: "center", alignItems: "center"}}>
+          <div style={{color: "#e9e7dd", fontSize: "14px"}}>Loading...</div>
+        </div>
+      );
+    }
+
+    // Show auth screen if not logged in
+    if (!user) {
+      return <window.AuthScreen onLoginSuccess={() => {}} />;
+    }
+
+    // Main app content
+    return (
+      <div style={appStyles.container}>
+        {/* Header */}
+        <div style={appStyles.header}>
+          <div style={appStyles.headerContent}>
+            <h1 style={appStyles.appTitle}>World Cup Forecaster</h1>
+            <button onClick={handleLogout} style={appStyles.logoutButton}>
+              Sign Out
+            </button>
+          </div>
+          <div style={appStyles.userInfo}>{user.email}</div>
+        </div>
+
+        {/* Content */}
+        <div style={appStyles.content}>
+          {currentTab === "forecast" && <window.ForecastScreen teams={teamsData} meta={window.appData?.meta} />}
+          {currentTab === "teams" && <window.TeamsScreen teams={teamsData} onSelectTeam={setSelectedTeam} />}
+          {currentTab === "signal" && <window.SignalScreen teams={teamsData} />}
+          {currentTab === "match" && <window.MatchScreen teams={teamsData} />}
+          {currentTab === "method" && <window.MethodScreen />}
+          {currentTab === "help" && <window.HelpScreen />}
+          {currentTab === "betting" && <window.BettingAdviceScreen teams={teamsData} userId={user.uid} />}
+          {currentTab === "watchlist" && <window.WatchlistScreen teams={teamsData} userId={user.uid} />}
+          {currentTab === "prediction" && <window.MyPredictionScreen teams={teamsData} userId={user.uid} />}
+          {currentTab === "feed" && <window.LiveFeedScreen userId={user.uid} />}
+        </div>
+
+        {/* Tab Bar */}
+        <div style={appStyles.tabBar}>
+          <button
+            onClick={() => setCurrentTab("forecast")}
+            style={{...appStyles.tabButton, background: currentTab === "forecast" ? "#e3b341" : "transparent"}}
+          >
+            📊
+          </button>
+          <button
+            onClick={() => setCurrentTab("teams")}
+            style={{...appStyles.tabButton, background: currentTab === "teams" ? "#e3b341" : "transparent"}}
+          >
+            🏳️
+          </button>
+          <button
+            onClick={() => setCurrentTab("signal")}
+            style={{...appStyles.tabButton, background: currentTab === "signal" ? "#e3b341" : "transparent"}}
+          >
+            📡
+          </button>
+          <button
+            onClick={() => setCurrentTab("match")}
+            style={{...appStyles.tabButton, background: currentTab === "match" ? "#e3b341" : "transparent"}}
+          >
+            ⚽
+          </button>
+          <button
+            onClick={() => setCurrentTab("watchlist")}
+            style={{...appStyles.tabButton, background: currentTab === "watchlist" ? "#e3b341" : "transparent"}}
+          >
+            ❤️
+          </button>
+          <button
+            onClick={() => setCurrentTab("prediction")}
+            style={{...appStyles.tabButton, background: currentTab === "prediction" ? "#e3b341" : "transparent"}}
+          >
+            🎯
+          </button>
+          <button
+            onClick={() => setCurrentTab("feed")}
+            style={{...appStyles.tabButton, background: currentTab === "feed" ? "#e3b341" : "transparent"}}
+          >
+            📰
+          </button>
+          <button
+            onClick={() => setCurrentTab("betting")}
+            style={{...appStyles.tabButton, background: currentTab === "betting" ? "#e3b341" : "transparent"}}
+          >
+            💰
+          </button>
+          <button
+            onClick={() => setCurrentTab("help")}
+            style={{...appStyles.tabButton, background: currentTab === "help" ? "#e3b341" : "transparent"}}
+          >
+            ❓
+          </button>
+          <button
+            onClick={() => setCurrentTab("method")}
+            style={{...appStyles.tabButton, background: currentTab === "method" ? "#e3b341" : "transparent"}}
+          >
+            ⚙️
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const appStyles = {
+    container: {
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+      background: "#0a0f0e",
+      color: "#e9e7dd",
+      fontFamily: "'IBM Plex Sans', sans-serif",
+    },
+    header: {
+      background: "#141a18",
+      borderBottom: "1px solid #2a3229",
+      padding: "12px 16px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "8px",
+    },
+    headerContent: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    appTitle: {
+      fontSize: "16px",
+      fontWeight: "600",
+      margin: "0",
+      color: "#e3b341",
+    },
+    logoutButton: {
+      background: "#d2685a",
+      color: "#fff",
+      border: "none",
+      borderRadius: "4px",
+      padding: "6px 12px",
+      fontSize: "12px",
+      fontWeight: "600",
+      cursor: "pointer",
+    },
+    userInfo: {
+      fontSize: "12px",
+      color: "#b8b5a8",
+    },
+    content: {
+      flex: 1,
+      overflow: "auto",
+    },
+    tabBar: {
+      display: "flex",
+      justifyContent: "space-around",
+      alignItems: "center",
+      background: "#141a18",
+      borderTop: "1px solid #2a3229",
+      padding: "8px 0",
+      gap: "4px",
+    },
+    tabButton: {
+      flex: 1,
+      padding: "12px",
+      border: "none",
+      color: "#e9e7dd",
+      fontSize: "18px",
+      cursor: "pointer",
+      transition: "background 0.2s",
+      borderRadius: "4px",
+    },
+  };
+})();
+
+/* global React, Icon, Flag, DeltaChip, ProbBar, NullBadge, SectionLabel, pct */
+const { useState: useStateF } = React;
+
+const METRICS = [
+  { k: 'win', s: 'Winner' }, { k: 'fin', s: 'Final' }, { k: 'sf', s: 'SF' },
+  { k: 'qf', s: 'QF' }, { k: 'r16', s: 'R16' }, { k: 'r32', s: 'R32' }, { k: 'groupExit', s: 'Grp exit' },
+];
+
+function Top5Card({ t, i, onOpen }) {
+  return (
+    <button onClick={() => onOpen(t)} className="rise" style={{ animationDelay: (i * 50) + 'ms', flex: '0 0 168px', textAlign: 'left', background: 'var(--ink-2)', border: '1px solid var(--line)', borderRadius: 14, padding: '13px 13px 14px', cursor: 'pointer', scrollSnapAlign: 'start' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="num" style={{ fontSize: 11, color: 'var(--faint)' }}>#{t.rank}</span>
+        <DeltaChip v={t.netChange} small />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0 8px' }}>
+        <Flag t={t} />
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>{t.name}</span>
+      </div>
+      <div className="num serif" style={{ fontSize: 30, lineHeight: 1, color: 'var(--amber)', fontWeight: 600 }}>{pct(t.win)}<span style={{ fontSize: 14, color: 'var(--faint)' }}>%</span></div>
+      <div style={{ marginTop: 11, display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {t.drivers.slice(0, 2).map((d, j) => (
+          <div key={j} style={{ display: 'flex', gap: 6, fontSize: 11, color: 'var(--dim)', lineHeight: 1.3 }}>
+            <span style={{ color: 'var(--amber)', flexShrink: 0 }}>·</span>
+            <span style={{ textWrap: 'pretty' }}>{d}</span>
+          </div>
+        ))}
+      </div>
+    </button>
+  );
+}
+
+function ForecastRow({ t, i, metric, onOpen }) {
+  const val = t[metric];
+  const isExit = metric === 'groupExit';
+  return (
+    <button onClick={() => onOpen(t)} className="rise" style={{ animationDelay: Math.min(i * 26, 520) + 'ms', width: '100%', textAlign: 'left', background: 'none', border: 0, borderBottom: '1px solid var(--line)', padding: '13px 18px', cursor: 'pointer', display: 'block' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span className="num" style={{ width: 18, fontSize: 12, color: 'var(--faint)', textAlign: 'right', flexShrink: 0 }}>{t.rank}</span>
+        <Flag t={t} />
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ fontSize: 15, fontWeight: 500, whiteSpace: 'nowrap' }}>{t.name}</span>
+          <span className="num" style={{ fontSize: 9.5, color: 'var(--ghost)', border: '1px solid var(--line)', borderRadius: 4, padding: '0 4px', flexShrink: 0 }}>{t.group}</span>
+          {!t.xg.hasXg && <span style={{ width: 5, height: 5, borderRadius: 9, border: '1.5px solid var(--faint)', flexShrink: 0 }} title="baseline only" />}
+        </div>
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 9 }}>
+          <div className="num" style={{ fontSize: 21, lineHeight: 1, color: isExit ? 'var(--red)' : 'var(--amber)', fontWeight: 600, textAlign: 'right' }}>{pct(val)}<span style={{ fontSize: 11, color: 'var(--faint)' }}>%</span></div>
+          <div style={{ width: 50, display: 'flex', justifyContent: 'flex-end' }}><DeltaChip v={t.netChange} small /></div>
+        </div>
+      </div>
+      <div style={{ marginLeft: 32, marginTop: 8 }}>
+        <ProbBar value={val} max={isExit ? 1 : 0.135} color={isExit ? 'var(--red)' : 'var(--amber)'} />
+      </div>
+    </button>
+  );
+}
+
+function SkeletonRow({ i }) {
+  return (
+    <div style={{ padding: '13px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="sk" style={{ width: 26, height: 18, opacity: 1 - i * 0.07 }} />
+      <div className="sk" style={{ width: 80 + (i % 3) * 20, height: 14, opacity: 1 - i * 0.07 }} />
+      <div style={{ flex: 1 }} />
+      <div className="sk" style={{ width: 48, height: 18, opacity: 1 - i * 0.07 }} />
+    </div>
+  );
+}
+
+function ForecastScreen({ teams, meta, onOpen, simRunning }) {
+  const [metric, setMetric] = React.useState('win');
+  const sorted = [...teams].sort((a, b) => b[metric] - a[metric]);
+  const top5 = [...teams].sort((a, b) => b.win - a.win).slice(0, 5);
+
+  return (
+    <>
+      <div className="wc-head">
+        <div className="wc-head-row">
+          <div>
+            <div className="wc-kicker"><span className={'dot' + (simRunning ? ' live' : '')} />{simRunning ? 'Simulating…' : 'Live'} · WC 2026</div>
+            <h1 className="wc-title serif">Forecast</h1>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <div className="num" style={{ fontSize: 11, color: 'var(--dim)' }}>Run {meta.runId}</div>
+            <div className="num" style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>{meta.runDate.split(' · ')[0]}</div>
+          </div>
+        </div>
+        <div className="wc-sub" style={{ maxWidth: 'none', display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 9 }}>
+          <span style={{ color: 'var(--amber)', flexShrink: 0, fontFamily: 'var(--mono)', fontSize: 10, marginTop: 2 }}>▲ Δ</span>
+          <span>{meta.changeLine}</span>
+        </div>
+      </div>
+
+      {/* Top 5 strip */}
+      <div style={{ margin: '4px 0 6px' }}>
+        <div style={{ padding: '0 18px' }}><SectionLabel>Top 5 · championship odds</SectionLabel></div>
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '0 18px 6px', scrollSnapType: 'x mandatory' }} className="noscroll">
+          {top5.map((t, i) => <Top5Card key={t.id} t={t} i={i} onOpen={onOpen} />)}
+        </div>
+      </div>
+
+      {/* sort control */}
+      <div style={{ padding: '8px 18px 10px', position: 'sticky', top: 0, zIndex: 4, background: 'linear-gradient(var(--ink) 80%,transparent)' }}>
+        <SectionLabel right={<span className="num" style={{ fontSize: 10, color: 'var(--faint)' }}>{teams.length} teams</span>}>
+          Sort · {METRICS.find(m => m.k === metric).s}
+        </SectionLabel>
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }} className="noscroll">
+          {METRICS.map(m => (
+            <button key={m.k} onClick={() => setMetric(m.k)} className="num" style={{ flexShrink: 0, fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.02em', textTransform: 'uppercase', padding: '5px 11px', borderRadius: 8, cursor: 'pointer', border: '1px solid ' + (metric === m.k ? 'var(--amber)' : 'var(--line)'), background: metric === m.k ? 'var(--amber-dim)' : 'transparent', color: metric === m.k ? 'var(--amber)' : 'var(--dim)' }}>{m.s}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* table */}
+      <div>
+        {simRunning
+          ? Array.from({ length: 9 }).map((_, i) => <SkeletonRow key={i} i={i} />)
+          : sorted.map((t, i) => <ForecastRow key={t.id} t={t} i={i} metric={metric} onOpen={onOpen} />)}
+      </div>
+      <div style={{ height: 18 }} />
+    </>
+  );
+}
+
+window.ForecastScreen = ForecastScreen;
+
+/* global React, Icon, Flag, DeltaChip, ProbBar, NullBadge, LowConfBadge, SectionLabel, Funnel, pct */
+const { useState: useStateT } = React;
+
+function StatTile({ label, value, unit, sub, color }) {
+  return (
+    <div style={{ flex: 1, padding: '12px 13px', background: 'var(--ink-1)', borderRadius: 11, border: '1px solid var(--line)' }}>
+      <div className="label" style={{ fontSize: 9 }}>{label}</div>
+      <div className="num" style={{ fontSize: 22, marginTop: 6, color: color || 'var(--text)', fontWeight: 500 }}>{value}<span style={{ fontSize: 11, color: 'var(--faint)', marginLeft: 1 }}>{unit}</span></div>
+      {sub && <div className="num" style={{ fontSize: 10, color: 'var(--faint)', marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function XgCard({ t }) {
+  if (!t.xg.hasXg) {
+    return (
+      <div style={{ padding: '20px 16px', background: 'repeating-linear-gradient(135deg,rgba(233,231,221,0.04),rgba(233,231,221,0.04) 6px,transparent 6px,transparent 13px)', border: '1px dashed var(--line-2)', borderRadius: 14, textAlign: 'center' }}>
+        <div style={{ display: 'inline-flex', width: 38, height: 38, borderRadius: 11, border: '1.5px dashed var(--faint)', alignItems: 'center', justifyContent: 'center', marginBottom: 11 }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 18, color: 'var(--faint)' }}>∅</span>
+        </div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>No xG data — baseline only</div>
+        <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 6, maxWidth: '34ch', marginInline: 'auto', textWrap: 'pretty' }}>
+          {t.conf} match-level expected-goals coverage is incomplete. {t.name}’s rating is anchored to Elo + pundit signal only, and won’t react sharply to in-tournament form.
+        </div>
+        <div style={{ marginTop: 12 }}><NullBadge>Elo-anchored · {t.conf}</NullBadge></div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 9 }}>
+        <StatTile label="xG / 90" value={t.xg.xg90} color="var(--amber)" />
+        <StatTile label="xGA / 90" value={t.xg.xga90} />
+      </div>
+      <div style={{ display: 'flex', gap: 9, marginTop: 9 }}>
+        <StatTile label="Sample" value={t.xg.mp} unit=" MP" />
+        <StatTile label="Confed." value={t.conf} sub={null} />
+      </div>
+      {t.xg.lowConf && (
+        <div style={{ marginTop: 11, display: 'flex', gap: 9, alignItems: 'flex-start', padding: '10px 12px', background: 'var(--blue-dim)', borderRadius: 10 }}>
+          <Icon name="info" size={15} stroke="var(--blue)" />
+          <div style={{ fontSize: 11.5, color: 'var(--dim)', textWrap: 'pretty' }}>Low sample ({t.xg.mp} matches). xG figures shown with a wide uncertainty band — treat as indicative, not settled.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Scenario({ sc, on, onToggle }) {
+  const up = sc.delta > 0;
+  return (
+    <button onClick={onToggle} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 13px', background: on ? 'var(--ink-3)' : 'var(--ink-1)', border: '1px solid ' + (on ? 'var(--line-2)' : 'var(--line)'), borderRadius: 11, cursor: 'pointer', textAlign: 'left' }}>
+      <span style={{ width: 36, height: 22, borderRadius: 999, background: on ? 'var(--amber)' : 'rgba(233,231,221,0.12)', position: 'relative', flexShrink: 0, transition: 'background .2s' }}>
+        <span style={{ position: 'absolute', top: 2, left: on ? 16 : 2, width: 18, height: 18, borderRadius: 999, background: on ? '#1a1407' : 'var(--faint)', transition: 'left .2s' }} />
+      </span>
+      <span style={{ flex: 1, fontSize: 13.5 }}>{sc.label}</span>
+      <span className={'chip ' + (up ? 'green' : 'red')}><Icon name={up ? 'up' : 'down'} size={11} sw={2.2} />{up ? '+' : '−'}{Math.abs(sc.delta).toFixed(1)}pp</span>
+    </button>
+  );
+}
+
+function TeamDetail({ t, onClose }) {
+  const [active, setActive] = useStateT({});
+  const adj = t.scenarios.reduce((a, s, i) => a + (active[i] ? s.delta : 0), 0);
+  const shownWin = Math.max(0, t.win * 100 + adj);
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 30, background: 'var(--ink)', display: 'flex', flexDirection: 'column', animation: 'rise .32s cubic-bezier(.2,.7,.2,1)' }}>
+      {/* head */}
+      <div className="wc-head" style={{ paddingBottom: 14 }}>
+        <button onClick={onClose} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--ink-2)', border: '1px solid var(--line)', borderRadius: 999, padding: '6px 12px 6px 8px', color: 'var(--dim)', cursor: 'pointer', fontSize: 12.5, marginBottom: 14 }}>
+          <Icon name="chevR" size={14} stroke="var(--dim)" sw={2} /><span style={{ transform: 'scaleX(-1)', display: 'none' }} />Forecast
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
+          <Flag t={t} size="lg" />
+          <div style={{ flex: 1 }}>
+            <h1 className="wc-title serif" style={{ fontSize: 26 }}>{t.name}</h1>
+            <div className="num" style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 4 }}>Group {t.group} · {t.conf} · rank #{t.rank}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="wc-main" style={{ padding: '4px 18px 28px' }}>
+        {/* headline winner% */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '4px 0 16px' }}>
+          <div>
+            <div className="label">{Object.values(active).some(Boolean) ? 'Adjusted champion odds' : 'Champion odds'}</div>
+            <div className="num serif" style={{ fontSize: 46, lineHeight: 1, color: 'var(--amber)', fontWeight: 600, marginTop: 4, transition: 'color .3s' }}>{shownWin.toFixed(1)}<span style={{ fontSize: 20, color: 'var(--faint)' }}>%</span></div>
+          </div>
+          <div style={{ textAlign: 'right', paddingBottom: 6 }}>
+            <div className="label" style={{ marginBottom: 5 }}>vs last run</div>
+            <DeltaChip v={t.netChange} />
+          </div>
+        </div>
+
+        <SectionLabel>Stage funnel · reach probability</SectionLabel>
+        <div className="card" style={{ padding: '15px 14px', marginBottom: 22 }}><Funnel t={t} /></div>
+
+        <SectionLabel right={t.xg.lowConf ? <LowConfBadge /> : (t.xg.hasXg ? <span className="num" style={{ fontSize: 10, color: 'var(--faint)' }}>{t.xg.mp} matches</span> : null)}>Expected goals</SectionLabel>
+        <div style={{ marginBottom: 22 }}><XgCard t={t} /></div>
+
+        <SectionLabel right={Object.values(active).some(Boolean) ? <button onClick={() => setActive({})} style={{ background: 'none', border: 0, color: 'var(--blue)', fontSize: 11, fontFamily: 'var(--mono)', cursor: 'pointer' }}>reset</button> : null}>Scenarios · what-if</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
+          {t.scenarios.map((sc, i) => <Scenario key={i} sc={sc} on={!!active[i]} onToggle={() => setActive(a => ({ ...a, [i]: !a[i] }))} />)}
+        </div>
+
+        <SectionLabel right={<span className="num" style={{ fontSize: 10, color: 'var(--faint)' }}>{t.injuries.length || 'none'}</span>}>Availability</SectionLabel>
+        {t.injuries.length === 0 ? (
+          <div className="card" style={{ padding: '14px', fontSize: 12.5, color: 'var(--dim)', display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ color: 'var(--green)' }}>✓</span> Full squad available — no flagged absences.</div>
+        ) : (
+          <div className="card" style={{ overflow: 'hidden' }}>
+            {t.injuries.map((inj, i) => {
+              const c = inj.tone === 'green' ? 'var(--green)' : inj.tone === 'clay' ? 'var(--red)' : 'var(--amber)';
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', borderBottom: i < t.injuries.length - 1 ? '1px solid var(--line)' : 0 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 9, background: c, flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 13.5 }}>{inj.player}</span>
+                  <span className="num" style={{ fontSize: 11.5, color: c }}>{inj.status}</span>
+                  <span className="num" style={{ fontSize: 10.5, color: 'var(--faint)', width: 40, textAlign: 'right' }}>{inj.date}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TeamsScreen({ data, onOpen }) {
+  const [q, setQ] = useStateT('');
+  const teams = data.teams.filter(t => t.name.toLowerCase().includes(q.toLowerCase()) || t.code.toLowerCase().includes(q.toLowerCase()) || t.group.toLowerCase() === q.toLowerCase());
+  return (
+    <>
+      <div className="wc-head">
+        <div className="wc-kicker"><span className="dot" />Directory · 48 teams</div>
+        <h1 className="wc-title serif">Teams</h1>
+        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 9, background: 'var(--ink-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '0 12px' }}>
+          <Icon name="search" size={16} stroke="var(--faint)" />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search team, code, or group" style={{ flex: 1, background: 'none', border: 0, outline: 'none', color: 'var(--text)', fontFamily: 'var(--sans)', fontSize: 14, padding: '11px 0' }} />
+          {q && <button onClick={() => setQ('')} style={{ background: 'none', border: 0, cursor: 'pointer', padding: 4 }}><Icon name="close" size={14} stroke="var(--faint)" /></button>}
+        </div>
+      </div>
+      <div className="wc-main" style={{ padding: '2px 0 24px' }}>
+        {teams.length === 0 && <div style={{ padding: 40, textAlign: 'center', color: 'var(--faint)', fontSize: 13 }}>No teams match “{q}”.</div>}
+        {teams.map((t, i) => (
+          <button key={t.id} onClick={() => onOpen(t)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, borderBottom: '1px solid var(--line)', padding: '12px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span className="num" style={{ width: 20, fontSize: 12, color: 'var(--faint)', textAlign: 'right' }}>{t.rank}</span>
+            <Flag t={t} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 500 }}>{t.name}</div>
+              <div className="num" style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 1 }}>Grp {t.group} · {t.conf}{!t.xg.hasXg ? ' · baseline' : ''}</div>
+            </div>
+            <span className="num" style={{ fontSize: 15, color: 'var(--amber)' }}>{pct(t.win)}%</span>
+            <Icon name="chevR" size={15} stroke="var(--ghost)" />
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+Object.assign(window, { TeamDetail, TeamsScreen });
+
+/* global React, Icon, Flag, SignalGauge, CitationPill, SectionLabel */
+const { useState: useStateS } = React;
+
+function SignalRow({ t, open, onToggle }) {
+  const v = t.signal.value;
+  const c = v > 0.15 ? 'var(--green)' : v < -0.15 ? 'var(--red)' : 'var(--faint)';
+  return (
+    <div style={{ borderBottom: '1px solid var(--line)' }}>
+      <button onClick={onToggle} style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, padding: '13px 18px', cursor: 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 9 }}>
+          <Flag t={t} size="sm" />
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>{t.name}</span>
+          <span className="num" style={{ fontSize: 11, color: 'var(--faint)' }}>conf {t.signal.confidence}%</span>
+          <span className={'chip ' + (t.signal.eloAdj > 0 ? 'green' : t.signal.eloAdj < 0 ? 'red' : 'flat')}>{t.signal.eloAdj > 0 ? '+' : ''}{t.signal.eloAdj} Elo{t.signal.capped ? ' ·cap' : ''}</span>
+          <Icon name={open ? 'chevD' : 'chevR'} size={15} stroke="var(--ghost)" />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="num" style={{ width: 26, fontSize: 10, color: 'var(--red)', textAlign: 'right' }}>−1</span>
+          <div style={{ flex: 1 }}><SignalGauge value={v} /></div>
+          <span className="num" style={{ width: 26, fontSize: 10, color: 'var(--green)' }}>+1</span>
+          <span className="num" style={{ width: 42, textAlign: 'right', fontSize: 13, color: c, fontWeight: 600 }}>{v > 0 ? '+' : ''}{v.toFixed(2)}</span>
+        </div>
+      </button>
+      {open && (
+        <div style={{ padding: '0 18px 15px', animation: 'rise .3s' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', background: 'var(--ink-1)', borderRadius: 11, border: '1px solid var(--line)' }}>
+            {t.signal.claims.map((cl, i) => (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--dim)', textWrap: 'pretty' }}>“…{cl.text}.”</div>
+                <CitationPill src={cl.src} date={cl.date} />
+                {i < t.signal.claims.length - 1 && <hr className="hair" style={{ marginTop: 3 }} />}
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 3, paddingTop: 9, borderTop: '1px solid var(--line)' }}>
+              <Icon name="info" size={13} stroke="var(--faint)" />
+              <div style={{ fontSize: 11, color: 'var(--faint)', fontStyle: 'italic', textWrap: 'pretty' }}>{t.signal.trackNote}</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SignalScreen({ data }) {
+  const [openId, setOpenId] = useStateS(null);
+  const [sort, setSort] = useStateS('abs');
+  let teams = [...data.teams];
+  if (sort === 'pos') teams.sort((a, b) => b.signal.value - a.signal.value);
+  else if (sort === 'neg') teams.sort((a, b) => a.signal.value - b.signal.value);
+  else teams.sort((a, b) => Math.abs(b.signal.value) - Math.abs(a.signal.value));
+
+  return (
+    <>
+      <div className="wc-head">
+        <div className="wc-kicker"><span className="dot" />Pundit dashboard</div>
+        <h1 className="wc-title serif">Signal</h1>
+      </div>
+      <div className="wc-main" style={{ padding: '2px 0 24px' }}>
+        {/* cap banner */}
+        <div style={{ margin: '0 18px 14px', padding: '13px 14px', background: 'var(--blue-dim)', border: '1px solid rgba(90,166,210,0.3)', borderRadius: 12, display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+          <Icon name="info" size={17} stroke="var(--blue)" />
+          <div style={{ fontSize: 12, color: 'var(--dim)', textWrap: 'pretty', lineHeight: 1.45 }}>
+            <b style={{ color: 'var(--text)' }}>Expert opinion is hard-capped at ±25 Elo.</b> {data.meta.pundit.note.split('. ')[1]}.
+          </div>
+        </div>
+
+        <div style={{ padding: '0 18px 10px' }}>
+          <SectionLabel right={
+            <div className="seg">
+              {[['abs', 'Loudest'], ['pos', '＋'], ['neg', '－']].map(([k, l]) => (
+                <button key={k} className={sort === k ? 'on' : ''} onClick={() => setSort(k)}>{l}</button>
+              ))}
+            </div>
+          }>Signal · −1 bearish → +1 bullish</SectionLabel>
+        </div>
+
+        {teams.map(t => <SignalRow key={t.id} t={t} open={openId === t.id} onToggle={() => setOpenId(o => o === t.id ? null : t.id)} />)}
+      </div>
+    </>
+  );
+}
+
+window.SignalScreen = SignalScreen;
+
+/* global React, Icon, Flag, WDLBar, SectionLabel, NullBadge */
+const { useState: useStateM, useMemo: useMemoM } = React;
+
+// crude Elo proxy from rank + signal
+const eloOf = t => 1700 + (49 - t.rank) * 9 + t.signal.eloAdj;
+
+function poisson(k, l) { return Math.exp(-l) * Math.pow(l, k) / factorial(k); }
+function factorial(n) { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; }
+
+function simulate(a, b, hostBoost) {
+  const dA = (eloOf(a) - eloOf(b)) / 2;
+  // base lambdas from elo diff, blended with xG if available
+  let lamA = 1.38 + dA / 230;
+  let lamB = 1.38 - dA / 230;
+  if (a.xg.hasXg && b.xg.hasXg) {
+    lamA = (lamA + (a.xg.xg90 + b.xg.xga90) / 2) / 2;
+    lamB = (lamB + (b.xg.xg90 + a.xg.xga90) / 2) / 2;
+  }
+  lamA = Math.max(0.25, lamA + (hostBoost || 0));
+  lamB = Math.max(0.25, lamB);
+  const N = 7;
+  let w = 0, d = 0, l = 0, best = { p: 0, a: 0, b: 0 };
+  for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+    const p = poisson(i, lamA) * poisson(j, lamB);
+    if (i > j) w += p; else if (i === j) d += p; else l += p;
+    if (p > best.p) best = { p, a: i, b: j };
+  }
+  const s = w + d + l;
+  return { w: w / s, d: d / s, l: l / s, lamA, lamB, score: best };
+}
+
+function Picker({ label, team, onPick, teams, align }) {
+  const [open, setOpen] = useStateM(false);
+  return (
+    <>
+      <button onClick={() => setOpen(true)} style={{ flex: 1, background: 'var(--ink-2)', border: '1px solid var(--line)', borderRadius: 14, padding: '16px 13px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9 }}>
+        <Flag t={team} size="lg" />
+        <div style={{ fontSize: 14, fontWeight: 600, textAlign: 'center' }}>{team.name}</div>
+        <div className="num" style={{ fontSize: 10, color: 'var(--faint)' }}>{label} · tap to change</div>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 40, background: 'rgba(10,15,14,0.96)', display: 'flex', flexDirection: 'column', animation: 'rise .25s' }}>
+          <div style={{ padding: '54px 18px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span className="label" style={{ fontSize: 12 }}>Choose {label}</span>
+            <button onClick={() => setOpen(false)} style={{ background: 'var(--ink-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 7, cursor: 'pointer' }}><Icon name="close" size={16} stroke="var(--dim)" /></button>
+          </div>
+          <div className="wc-main">
+            {teams.map(t => (
+              <button key={t.id} onClick={() => { onPick(t); setOpen(false); }} style={{ width: '100%', textAlign: 'left', background: t.id === team.id ? 'var(--ink-2)' : 'none', border: 0, borderBottom: '1px solid var(--line)', padding: '11px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 11 }}>
+                <span className="num" style={{ width: 18, fontSize: 11, color: 'var(--faint)', textAlign: 'right' }}>{t.rank}</span>
+                <Flag t={t} size="sm" />
+                <span style={{ flex: 1, fontSize: 14 }}>{t.name}</span>
+                {t.id === team.id && <span style={{ color: 'var(--amber)' }}>✓</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function MatchScreen({ data }) {
+  const ts = data.teams;
+  const [a, setA] = useStateM(ts.find(t => t.code === 'ESP'));
+  const [b, setB] = useStateM(ts.find(t => t.code === 'ARG'));
+  const [host, setHost] = useStateM(false);
+  const r = useMemoM(() => simulate(a, b, host ? 0.22 : 0), [a, b, host]);
+
+  const edges = [];
+  if (r.lamA - r.lamB > 0.15) edges.push({ t: `${a.code} carries a +${(r.lamA - r.lamB).toFixed(2)} expected-goal edge`, c: 'green' });
+  else if (r.lamB - r.lamA > 0.15) edges.push({ t: `${b.code} carries a +${(r.lamB - r.lamA).toFixed(2)} expected-goal edge`, c: 'red' });
+  else edges.push({ t: 'Margins are thin — essentially a coin-flip on the day', c: 'blue' });
+  if (!a.xg.hasXg || !b.xg.hasXg) edges.push({ t: `${!a.xg.hasXg ? a.code : b.code} is baseline-only — xG blend skipped, Elo-driven`, c: 'amber' });
+  if (Math.abs(a.signal.eloAdj) >= 15) edges.push({ t: `Pundit signal moved ${a.code} ${a.signal.eloAdj > 0 ? '+' : ''}${a.signal.eloAdj} Elo (capped)`, c: a.signal.eloAdj > 0 ? 'green' : 'red' });
+
+  return (
+    <>
+      <div className="wc-head">
+        <div className="wc-kicker"><span className="dot" />Single-match simulator · engine E</div>
+        <h1 className="wc-title serif">Match</h1>
+      </div>
+      <div className="wc-main" style={{ padding: '6px 18px 28px' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
+          <Picker label="Team A" team={a} onPick={setA} teams={ts} />
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <button onClick={() => { setA(b); setB(a); }} style={{ background: 'var(--ink-3)', border: '1px solid var(--line)', borderRadius: 999, padding: 9, cursor: 'pointer' }}><Icon name="swap" size={17} stroke="var(--dim)" /></button>
+          </div>
+          <Picker label="Team B" team={b} onPick={setB} teams={ts} />
+        </div>
+
+        <div style={{ marginTop: 22 }}>
+          <SectionLabel>Result distribution · 40k sims</SectionLabel>
+          <WDLBar w={r.w} d={r.d} l={r.l} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+            <div className="num" style={{ fontSize: 11, color: 'var(--green)' }}>{a.code} win {(r.w * 100).toFixed(0)}%</div>
+            <div className="num" style={{ fontSize: 11, color: 'var(--faint)' }}>Draw {(r.d * 100).toFixed(0)}%</div>
+            <div className="num" style={{ fontSize: 11, color: 'var(--red)' }}>{b.code} win {(r.l * 100).toFixed(0)}%</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 9, marginTop: 20 }}>
+          <div style={{ flex: 1, padding: '14px 13px', background: 'var(--ink-1)', border: '1px solid var(--line)', borderRadius: 12 }}>
+            <div className="label" style={{ fontSize: 9 }}>Expected goals</div>
+            <div className="num" style={{ fontSize: 24, marginTop: 6, color: 'var(--amber)', fontWeight: 500 }}>{r.lamA.toFixed(2)}<span style={{ color: 'var(--faint)', margin: '0 5px', fontSize: 16 }}>–</span>{r.lamB.toFixed(2)}</div>
+            <div className="num" style={{ fontSize: 10, color: 'var(--faint)', marginTop: 3 }}>{a.code} · {b.code}</div>
+          </div>
+          <div style={{ flex: 1, padding: '14px 13px', background: 'var(--ink-1)', border: '1px solid var(--line)', borderRadius: 12 }}>
+            <div className="label" style={{ fontSize: 9 }}>Most-likely score</div>
+            <div className="num serif" style={{ fontSize: 24, marginTop: 6, fontWeight: 600 }}>{r.score.a}–{r.score.b}</div>
+            <div className="num" style={{ fontSize: 10, color: 'var(--faint)', marginTop: 3 }}>{(r.score.p * 100).toFixed(1)}% of outcomes</div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 13px', background: 'var(--ink-1)', border: '1px solid var(--line)', borderRadius: 11 }}>
+          <div>
+            <div style={{ fontSize: 13 }}>Neutral venue</div>
+            <div className="num" style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 2 }}>toggle host boost for {a.code}</div>
+          </div>
+          <button onClick={() => setHost(h => !h)} style={{ width: 44, height: 26, borderRadius: 999, background: host ? 'var(--amber)' : 'rgba(233,231,221,0.12)', border: 0, position: 'relative', cursor: 'pointer' }}>
+            <span style={{ position: 'absolute', top: 3, left: host ? 21 : 3, width: 20, height: 20, borderRadius: 999, background: host ? '#1a1407' : 'var(--faint)', transition: 'left .2s' }} />
+          </button>
+        </div>
+
+        <div style={{ marginTop: 22 }}>
+          <SectionLabel>Key edges</SectionLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {edges.map((e, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '11px 13px', background: 'var(--ink-2)', borderRadius: 10, border: '1px solid var(--line)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: 9, marginTop: 6, flexShrink: 0, background: `var(--${e.c})` }} />
+                <span style={{ fontSize: 12.5, color: 'var(--dim)', textWrap: 'pretty' }}>{e.t}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+window.MatchScreen = MatchScreen;
+
+/* global React, Icon, SectionLabel */
+const { useState: useStateMe } = React;
+
+function CoverageBar({ row }) {
+  const ratio = row.real / row.total;
+  const c = ratio === 1 ? 'var(--green)' : ratio === 0 ? 'var(--red)' : 'var(--amber)';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0' }}>
+      <div className="num" style={{ width: 78, fontSize: 12, color: 'var(--dim)' }}>{row.conf}</div>
+      <div style={{ flex: 1, display: 'flex', gap: 3 }}>
+        {Array.from({ length: row.total }).map((_, i) => (
+          <div key={i} style={{ flex: 1, height: 8, borderRadius: 2, background: i < row.real ? c : 'rgba(233,231,221,0.08)' }} />
+        ))}
+      </div>
+      <div className="num" style={{ width: 46, textAlign: 'right', fontSize: 11.5, color: c }}>{row.real}/{row.total}</div>
+    </div>
+  );
+}
+
+function Slider({ label, value, min, max, step, fmt, onChange }) {
+  const pctv = ((value - min) / (max - min)) * 100;
+  return (
+    <div style={{ padding: '11px 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 9 }}>
+        <span style={{ fontSize: 13, color: 'var(--dim)' }}>{label}</span>
+        <span className="num" style={{ fontSize: 13, color: 'var(--amber)' }}>{fmt ? fmt(value) : value}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(+e.target.value)}
+        style={{ width: '100%', accentColor: 'var(--amber)', background: `linear-gradient(90deg,var(--amber) ${pctv}%,rgba(233,231,221,0.12) ${pctv}%)`, height: 4, borderRadius: 4, appearance: 'none', WebkitAppearance: 'none', outline: 'none' }} />
+    </div>
+  );
+}
+
+function MethodScreen({ data, onRunSim, simRunning, simProgress }) {
+  const [op, setOp] = useStateMe(false);
+  const [sims, setSims] = useStateMe(40000);
+  const [hostBoost, setHostBoost] = useStateMe(60);
+  const [cap, setCap] = useStateMe(25);
+  const sevColor = { high: 'var(--red)', med: 'var(--amber)', low: 'var(--blue)' };
+
+  return (
+    <>
+      <div className="wc-head">
+        <div className="wc-kicker"><span className="dot" />Transparency · how it works</div>
+        <h1 className="wc-title serif">Method</h1>
+      </div>
+      <div className="wc-main" style={{ padding: '6px 18px 28px' }}>
+        {/* plain explanation */}
+        <div className="card" style={{ padding: '15px 15px', marginBottom: 20 }}>
+          <p style={{ margin: 0, fontSize: 13.5, color: 'var(--dim)', lineHeight: 1.55, textWrap: 'pretty' }}>
+            A Monte-Carlo engine plays the tournament <span className="num" style={{ color: 'var(--amber)' }}>{(sims / 1000).toFixed(0)}k</span> times. Each match is sampled from team ratings built on <b style={{ color: 'var(--text)' }}>expected goals (xG)</b> where available, anchored by <b style={{ color: 'var(--text)' }}>Elo</b>, then nudged by injuries and a <b style={{ color: 'var(--text)' }}>capped</b> pundit signal. Probabilities are the share of sims reaching each stage.
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 13, flexWrap: 'wrap' }}>
+            {['xG', 'Elo', 'Injuries', 'Pundit ±25', 'Host boost'].map(x => (
+              <span key={x} className="num" style={{ fontSize: 10.5, color: 'var(--dim)', border: '1px solid var(--line)', borderRadius: 7, padding: '3px 8px' }}>{x}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* cross-confederation note */}
+        <div style={{ marginBottom: 20, padding: '13px 14px', background: 'var(--blue-dim)', borderRadius: 12, display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+          <Icon name="info" size={17} stroke="var(--blue)" />
+          <div style={{ fontSize: 12, color: 'var(--dim)', textWrap: 'pretty', lineHeight: 1.45 }}>
+            <b style={{ color: 'var(--text)' }}>Cross-confederation caveat.</b> Inter-confederation priors lean on sparse historical fixtures. Treat knockout odds between e.g. AFC and UEFA sides as wide.
+          </div>
+        </div>
+
+        {/* coverage */}
+        <SectionLabel right={<span className="num" style={{ fontSize: 10, color: 'var(--faint)' }}>31/48 real xG</span>}>Data coverage · real xG vs baseline</SectionLabel>
+        <div className="card" style={{ padding: '8px 14px', marginBottom: 22 }}>
+          {data.meta.coverage.map(r => <CoverageBar key={r.conf} row={r} />)}
+          <div style={{ display: 'flex', gap: 14, marginTop: 6, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+            <span className="num" style={{ fontSize: 10, color: 'var(--faint)' }}><span style={{ color: 'var(--green)' }}>■</span> full</span>
+            <span className="num" style={{ fontSize: 10, color: 'var(--faint)' }}><span style={{ color: 'var(--amber)' }}>■</span> partial</span>
+            <span className="num" style={{ fontSize: 10, color: 'var(--faint)' }}><span style={{ color: 'var(--red)' }}>■</span> none</span>
+          </div>
+        </div>
+
+        {/* fragility */}
+        <SectionLabel right={<span className="chip red" style={{ fontSize: 10 }}><Icon name="warn" size={10} stroke="var(--red)" />{data.meta.fragility.filter(f => f.sev === 'high').length} high</span>}>Model fragility</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+          {data.meta.fragility.map((f, i) => (
+            <div key={i} style={{ padding: '12px 13px', background: 'var(--ink-2)', border: '1px solid var(--line)', borderLeft: `2px solid ${sevColor[f.sev]}`, borderRadius: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                <span className="num" style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: sevColor[f.sev] }}>{f.sev}</span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{f.title}</span>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--dim)', textWrap: 'pretty', lineHeight: 1.45 }}>{f.text}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* operator controls */}
+        <button onClick={() => setOp(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', background: 'var(--ink-2)', border: '1px solid var(--line)', borderRadius: 12, cursor: 'pointer' }}>
+          <Icon name="sliders" size={18} stroke="var(--amber)" />
+          <span style={{ flex: 1, textAlign: 'left', fontSize: 14, fontWeight: 600 }}>Operator controls</span>
+          <span className="num" style={{ fontSize: 10, color: 'var(--faint)' }}>restricted</span>
+          <Icon name={op ? 'chevD' : 'chevR'} size={16} stroke="var(--ghost)" />
+        </button>
+
+        {op && (
+          <div style={{ marginTop: 10, padding: '4px 14px 14px', background: 'var(--ink-1)', border: '1px solid var(--line)', borderRadius: 12, animation: 'rise .3s' }}>
+            <Slider label="Simulation count" value={sims} min={10000} max={100000} step={10000} fmt={v => (v / 1000) + 'k'} onChange={setSims} />
+            <hr className="hair" />
+            <Slider label="Host boost (Elo)" value={hostBoost} min={0} max={120} step={10} fmt={v => '+' + v} onChange={setHostBoost} />
+            <hr className="hair" />
+            <Slider label="Pundit cap (± Elo)" value={cap} min={0} max={60} step={5} fmt={v => '±' + v} onChange={setCap} />
+            <button className="btn primary" style={{ width: '100%', marginTop: 14 }} disabled={simRunning} onClick={() => onRunSim(sims)}>
+              {simRunning ? <>Running… {Math.round(simProgress * 100)}%</> : <><Icon name="play" size={14} stroke="#1a1407" /> Run simulation</>}
+            </button>
+            {simRunning && (
+              <div className="pbar" style={{ height: 4, marginTop: 11 }}><i style={{ width: (simProgress * 100) + '%', transition: 'width .2s linear' }} /></div>
+            )}
+            <button className="btn ghost" style={{ width: '100%', marginTop: 9 }}>Set as baseline</button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+window.MethodScreen = MethodScreen;
+
+/* global React */
+const { useState, useEffect, useRef, useMemo } = React;
+
+const pct = (x, d = 1) => (x * 100).toFixed(d);
+const tone = v => v > 0 ? 'green' : v < 0 ? 'red' : 'flat';
+
+// ── icons ──────────────────────────────────────────────
+function Icon({ name, size = 21, stroke = 'currentColor', sw = 1.6 }) {
+  const p = { fill: 'none', stroke, strokeWidth: sw, strokeLinecap: 'round', strokeLinejoin: 'round' };
+  const paths = {
+    forecast: <><path {...p} d="M3 19V5M3 19h16"/><rect {...p} x="6.5" y="11" width="3" height="6"/><rect {...p} x="11.5" y="7" width="3" height="10"/><rect {...p} x="16.5" y="13" width="3" height="4"/></>,
+    teams: <><path {...p} d="M12 3l7 2.5v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9v-5L12 3z"/><path {...p} d="M12 8v4M9.5 10h5"/></>,
+    signal: <><path {...p} d="M3 12a9 9 0 0118 0"/><path {...p} d="M12 12l4-2.5"/><circle cx="12" cy="12" r="1.4" fill={stroke} stroke="none"/></>,
+    match: <><path {...p} d="M5 4l5 5M5 9l5-5M14 15l5 5M19 15l-5 5"/><path {...p} d="M9 9l6 6M11 4h2M11 20h2" opacity="0.5"/></>,
+    method: <><path {...p} d="M6 3h9l3 3v15H6z"/><path {...p} d="M9 8h6M9 12h6M9 16h3"/></>,
+    chevR: <path {...p} d="M9 6l6 6-6 6"/>,
+    chevD: <path {...p} d="M6 9l6 6 6-6"/>,
+    up: <path {...p} d="M12 19V5M6 11l6-6 6 6"/>,
+    down: <path {...p} d="M12 5v14M6 13l6 6 6-6"/>,
+    swap: <><path {...p} d="M7 10l-3 3 3 3M4 13h10M17 14l3-3-3-3M20 11H10"/></>,
+    info: <><circle {...p} cx="12" cy="12" r="9"/><path {...p} d="M12 11v5M12 8h.01"/></>,
+    warn: <><path {...p} d="M12 4l9 16H3z"/><path {...p} d="M12 10v4M12 17h.01"/></>,
+    play: <path d="M7 5l11 7-11 7z" fill={stroke} stroke="none"/>,
+    close: <path {...p} d="M6 6l12 12M18 6L6 18"/>,
+    search: <><circle {...p} cx="11" cy="11" r="7"/><path {...p} d="M20 20l-4-4"/></>,
+    sliders: <><path {...p} d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle {...p} cx="16" cy="8" r="2"/><circle {...p} cx="8" cy="16" r="2"/></>,
+  };
+  return <svg viewBox="0 0 24 24" width={size} height={size} style={{ display: 'block' }}>{paths[name]}</svg>;
+}
+
+// ── flag → robust monospace country-code tile (emoji flags don't render cross-platform) ──
+function Flag({ t, size }) {
+  const dim = size === 'lg' ? { w: 40, h: 30, fs: 13 } : size === 'sm' ? { w: 26, h: 18, fs: 9.5 } : { w: 30, h: 21, fs: 11 };
+  return (
+    <span style={{ width: dim.w, height: dim.h, borderRadius: size === 'lg' ? 6 : 4, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ink-4)', boxShadow: 'inset 0 0 0 1px var(--line-2)', position: 'relative', overflow: 'hidden' }}>
+      <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: 'var(--amber)', opacity: 0.5 }} />
+      <span className="num" style={{ fontSize: dim.fs, fontWeight: 600, letterSpacing: '0.02em', color: 'var(--text)', paddingLeft: 3 }}>{t.code}</span>
+    </span>
+  );
+}
+
+// ── delta / net-change chip ────────────────────────────
+function DeltaChip({ v, small }) {
+  if (v === 0 || v == null) return <span className="chip flat" style={small ? { fontSize: 10, padding: '1px 6px' } : null}><span style={{ width: 4, height: 4, borderRadius: 9, background: 'currentColor', display: 'inline-block' }} />0.0</span>;
+  const up = v > 0;
+  return (
+    <span className={'chip ' + (up ? 'green' : 'red')} style={small ? { fontSize: 10, padding: '1px 6px' } : null}>
+      <Icon name={up ? 'up' : 'down'} size={small ? 9 : 11} sw={2.2} />
+      {up ? '+' : '−'}{Math.abs(v).toFixed(1)}
+    </span>
+  );
+}
+
+// ── probability bar ────────────────────────────────────
+function ProbBar({ value, max = 1, color = 'var(--amber)', h = 3 }) {
+  const [w, setW] = useState(0);
+  useEffect(() => { const id = requestAnimationFrame(() => setW((value / max) * 100)); return () => cancelAnimationFrame(id); }, [value, max]);
+  return <div className="pbar" style={{ height: h }}><i style={{ width: w + '%', background: color }} /></div>;
+}
+
+// ── null / low-confidence badges ───────────────────────
+function NullBadge({ children = 'baseline only · no xG' }) {
+  return <span className="badge-null"><span style={{ width: 6, height: 6, borderRadius: 9, border: '1.5px solid var(--faint)' }} />{children}</span>;
+}
+function LowConfBadge() {
+  return <span className="chip blue" style={{ fontSize: 10 }}><Icon name="info" size={10} /> low sample</span>;
+}
+
+// ── citation pill ──────────────────────────────────────
+function CitationPill({ src, date }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--dim)', background: 'var(--ink-1)', border: '1px solid var(--line)', borderRadius: 999, padding: '3px 9px' }}>
+      <span style={{ color: 'var(--blue)' }}>◆</span>{src}
+      <span style={{ color: 'var(--faint)' }}>·</span>
+      <span className="num" style={{ color: 'var(--faint)' }}>{date}</span>
+    </span>
+  );
+}
+
+// ── stage funnel (Win→Final→SF→QF→R16→R32) ─────────────
+const STAGES = [
+  { k: 'win', label: 'Champion' },
+  { k: 'fin', label: 'Final' },
+  { k: 'sf', label: 'Semi-final' },
+  { k: 'qf', label: 'Quarter-final' },
+  { k: 'r16', label: 'Round of 16' },
+  { k: 'r32', label: 'Round of 32' },
+];
+function Funnel({ t }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+      {STAGES.map((s, i) => {
+        const v = t[s.k];
+        const isWin = s.k === 'win';
+        return (
+          <div key={s.k} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 96, flexShrink: 0, fontSize: 12.5, color: isWin ? 'var(--text)' : 'var(--dim)', fontWeight: isWin ? 600 : 400 }}>{s.label}</div>
+            <div style={{ flex: 1, position: 'relative', height: 20, background: 'rgba(233,231,221,0.05)', borderRadius: 5, overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', inset: 0, width: Math.max(v * 100, 1.5) + '%', background: isWin ? 'var(--amber)' : `rgba(227,179,65,${0.14 + (1 - i / 5) * 0.34})`, borderRadius: 5, transition: 'width .9s cubic-bezier(.2,.7,.2,1)' }} />
+            </div>
+            <div className="num" style={{ width: 46, textAlign: 'right', fontSize: 13, color: isWin ? 'var(--amber)' : 'var(--text)', fontWeight: isWin ? 600 : 400 }}>{pct(v)}<span style={{ fontSize: 10, color: 'var(--faint)' }}>%</span></div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── diverging signal gauge (−1 … +1) ───────────────────
+function SignalGauge({ value, h = 8 }) {
+  const half = Math.min(Math.abs(value), 1) * 50;
+  const positive = value >= 0;
+  return (
+    <div style={{ position: 'relative', height: h, borderRadius: h, background: 'rgba(233,231,221,0.06)', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'var(--line-2)', zIndex: 2 }} />
+      <div style={{
+        position: 'absolute', top: 0, bottom: 0, borderRadius: h,
+        ...(positive ? { left: '50%', width: half + '%', background: 'var(--green)' } : { right: '50%', width: half + '%', background: 'var(--red)' }),
+        transition: 'width .8s cubic-bezier(.2,.7,.2,1)',
+      }} />
+    </div>
+  );
+}
+
+// ── W / D / L segmented bar ────────────────────────────
+function WDLBar({ w, d, l }) {
+  const seg = (v, color, label) => v > 0.001 && (
+    <div style={{ width: v * 100 + '%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: v > 0.08 ? 'auto' : 0, transition: 'width .8s cubic-bezier(.2,.7,.2,1)' }}>
+      {v > 0.12 && <span className="num" style={{ fontSize: 12, color: '#0a0f0e', fontWeight: 600 }}>{Math.round(v * 100)}%</span>}
+    </div>
+  );
+  return (
+    <div style={{ display: 'flex', height: 38, borderRadius: 9, overflow: 'hidden', gap: 2, background: 'var(--ink)' }}>
+      {seg(w, 'var(--green)', 'W')}
+      {seg(d, 'rgba(233,231,221,0.30)', 'D')}
+      {seg(l, 'var(--red)', 'L')}
+    </div>
+  );
+}
+
+// ── section heading ────────────────────────────────────
+function SectionLabel({ children, right }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', margin: '0 0 10px' }}>
+      <div className="label">{children}</div>
+      {right}
+    </div>
+  );
+}
+
+Object.assign(window, { Icon, Flag, DeltaChip, ProbBar, NullBadge, LowConfBadge, CitationPill, Funnel, SignalGauge, WDLBar, SectionLabel, STAGES, pct, tone });
+
+// @ds-adherence-ignore -- omelette starter scaffold (raw elements/hex/px by design)
+
+/* BEGIN USAGE */
+// tweaks-panel.jsx
+// Reusable Tweaks shell + form-control helpers.
+// Exports (to window): useTweaks, TweaksPanel, TweakSection, TweakRow, TweakSlider,
+//   TweakToggle, TweakRadio, TweakSelect, TweakText, TweakNumber, TweakColor, TweakButton.
+//
+// Owns the host protocol (listens for __activate_edit_mode / __deactivate_edit_mode,
+// posts __edit_mode_available / __edit_mode_set_keys / __edit_mode_dismissed) so
+// individual prototypes don't re-roll it. Ships a consistent set of controls so you
+// don't hand-draw <input type="range">, segmented radios, steppers, etc.
+//
+// Usage (in an HTML file that loads React + Babel):
+//
+//   const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+//     "primaryColor": "#D97757",
+//     "palette": ["#D97757", "#29261b", "#f6f4ef"],
+//     "fontSize": 16,
+//     "density": "regular",
+//     "dark": false
+//   }/*EDITMODE-END*/;
+//
+//   function App() {
+//     const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+//     return (
+//       <div style={{ fontSize: t.fontSize, color: t.primaryColor }}>
+//         Hello
+//         <TweaksPanel>
+//           <TweakSection label="Typography" />
+//           <TweakSlider label="Font size" value={t.fontSize} min={10} max={32} unit="px"
+//                        onChange={(v) => setTweak('fontSize', v)} />
+//           <TweakRadio  label="Density" value={t.density}
+//                        options={['compact', 'regular', 'comfy']}
+//                        onChange={(v) => setTweak('density', v)} />
+//           <TweakSection label="Theme" />
+//           <TweakColor  label="Primary" value={t.primaryColor}
+//                        options={['#D97757', '#2A6FDB', '#1F8A5B', '#7A5AE0']}
+//                        onChange={(v) => setTweak('primaryColor', v)} />
+//           <TweakColor  label="Palette" value={t.palette}
+//                        options={[['#D97757', '#29261b', '#f6f4ef'],
+//                                  ['#475569', '#0f172a', '#f1f5f9']]}
+//                        onChange={(v) => setTweak('palette', v)} />
+//           <TweakToggle label="Dark mode" value={t.dark}
+//                        onChange={(v) => setTweak('dark', v)} />
+//         </TweaksPanel>
+//       </div>
+//     );
+//   }
+//
+// TweakRadio is the segmented control for 2–3 short options (auto-falls-back to
+// TweakSelect past ~16/~10 chars per label); reach for TweakSelect directly when
+// options are many or long. For color tweaks always curate 3-4 options rather than
+// a free picker; an option can also be a whole 2–5 color palette (the stored value
+// is the array). The Tweak* controls are a floor, not a ceiling — build custom
+// controls inside the panel if a tweak calls for UI they don't cover.
+/* END USAGE */
+// ─────────────────────────────────────────────────────────────────────────────
+
+const __TWEAKS_STYLE = `
+  .twk-panel{position:fixed;right:16px;bottom:16px;z-index:2147483646;width:280px;
+    max-height:calc(100vh - 32px);display:flex;flex-direction:column;
+    transform:scale(var(--dc-inv-zoom,1));transform-origin:bottom right;
+    background:rgba(250,249,247,.78);color:#29261b;
+    -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+    border:.5px solid rgba(255,255,255,.6);border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 12px 40px rgba(0,0,0,.18);
+    font:11.5px/1.4 ui-sans-serif,system-ui,-apple-system,sans-serif;overflow:hidden}
+  .twk-hd{display:flex;align-items:center;justify-content:space-between;
+    padding:10px 8px 10px 14px;cursor:move;user-select:none}
+  .twk-hd b{font-size:12px;font-weight:600;letter-spacing:.01em}
+  .twk-x{appearance:none;border:0;background:transparent;color:rgba(41,38,27,.55);
+    width:22px;height:22px;border-radius:6px;cursor:default;font-size:13px;line-height:1}
+  .twk-x:hover{background:rgba(0,0,0,.06);color:#29261b}
+  .twk-body{padding:2px 14px 14px;display:flex;flex-direction:column;gap:10px;
+    overflow-y:auto;overflow-x:hidden;min-height:0;
+    scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.15) transparent}
+  .twk-body::-webkit-scrollbar{width:8px}
+  .twk-body::-webkit-scrollbar-track{background:transparent;margin:2px}
+  .twk-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px;
+    border:2px solid transparent;background-clip:content-box}
+  .twk-body::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.25);
+    border:2px solid transparent;background-clip:content-box}
+  .twk-row{display:flex;flex-direction:column;gap:5px}
+  .twk-row-h{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+  .twk-lbl{display:flex;justify-content:space-between;align-items:baseline;
+    color:rgba(41,38,27,.72)}
+  .twk-lbl>span:first-child{font-weight:500}
+  .twk-val{color:rgba(41,38,27,.5);font-variant-numeric:tabular-nums}
+
+  .twk-sect{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:rgba(41,38,27,.45);padding:10px 0 0}
+  .twk-sect:first-child{padding-top:0}
+
+  .twk-field{appearance:none;box-sizing:border-box;width:100%;min-width:0;height:26px;padding:0 8px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:7px;
+    background:rgba(255,255,255,.6);color:inherit;font:inherit;outline:none}
+  .twk-field:focus{border-color:rgba(0,0,0,.25);background:rgba(255,255,255,.85)}
+  select.twk-field{padding-right:22px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='rgba(0,0,0,.5)' d='M0 0h10L5 6z'/></svg>");
+    background-repeat:no-repeat;background-position:right 8px center}
+
+  .twk-slider{appearance:none;-webkit-appearance:none;width:100%;height:4px;margin:6px 0;
+    border-radius:999px;background:rgba(0,0,0,.12);outline:none}
+  .twk-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:14px;height:14px;border-radius:50%;background:#fff;
+    border:.5px solid rgba(0,0,0,.12);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:default}
+  .twk-slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:#fff;border:.5px solid rgba(0,0,0,.12);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:default}
+
+  .twk-seg{position:relative;display:flex;padding:2px;border-radius:8px;
+    background:rgba(0,0,0,.06);user-select:none}
+  .twk-seg-thumb{position:absolute;top:2px;bottom:2px;border-radius:6px;
+    background:rgba(255,255,255,.9);box-shadow:0 1px 2px rgba(0,0,0,.12);
+    transition:left .15s cubic-bezier(.3,.7,.4,1),width .15s}
+  .twk-seg.dragging .twk-seg-thumb{transition:none}
+  .twk-seg button{appearance:none;position:relative;z-index:1;flex:1;border:0;
+    background:transparent;color:inherit;font:inherit;font-weight:500;min-height:22px;
+    border-radius:6px;cursor:default;padding:4px 6px;line-height:1.2;
+    overflow-wrap:anywhere}
+
+  .twk-toggle{position:relative;width:32px;height:18px;border:0;border-radius:999px;
+    background:rgba(0,0,0,.15);transition:background .15s;cursor:default;padding:0}
+  .twk-toggle[data-on="1"]{background:#34c759}
+  .twk-toggle i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+  .twk-toggle[data-on="1"] i{transform:translateX(14px)}
+
+  .twk-num{display:flex;align-items:center;box-sizing:border-box;min-width:0;height:26px;padding:0 0 0 8px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:7px;background:rgba(255,255,255,.6)}
+  .twk-num-lbl{font-weight:500;color:rgba(41,38,27,.6);cursor:ew-resize;
+    user-select:none;padding-right:8px}
+  .twk-num input{flex:1;min-width:0;height:100%;border:0;background:transparent;
+    font:inherit;font-variant-numeric:tabular-nums;text-align:right;padding:0 8px 0 0;
+    outline:none;color:inherit;-moz-appearance:textfield}
+  .twk-num input::-webkit-inner-spin-button,.twk-num input::-webkit-outer-spin-button{
+    -webkit-appearance:none;margin:0}
+  .twk-num-unit{padding-right:8px;color:rgba(41,38,27,.45)}
+
+  .twk-btn{appearance:none;height:26px;padding:0 12px;border:0;border-radius:7px;
+    background:rgba(0,0,0,.78);color:#fff;font:inherit;font-weight:500;cursor:default}
+  .twk-btn:hover{background:rgba(0,0,0,.88)}
+  .twk-btn.secondary{background:rgba(0,0,0,.06);color:inherit}
+  .twk-btn.secondary:hover{background:rgba(0,0,0,.1)}
+
+  .twk-swatch{appearance:none;-webkit-appearance:none;width:56px;height:22px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:6px;padding:0;cursor:default;
+    background:transparent;flex-shrink:0}
+  .twk-swatch::-webkit-color-swatch-wrapper{padding:0}
+  .twk-swatch::-webkit-color-swatch{border:0;border-radius:5.5px}
+  .twk-swatch::-moz-color-swatch{border:0;border-radius:5.5px}
+
+  .twk-chips{display:flex;gap:6px}
+  .twk-chip{position:relative;appearance:none;flex:1;min-width:0;height:46px;
+    padding:0;border:0;border-radius:6px;overflow:hidden;cursor:default;
+    box-shadow:0 0 0 .5px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.06);
+    transition:transform .12s cubic-bezier(.3,.7,.4,1),box-shadow .12s}
+  .twk-chip:hover{transform:translateY(-1px);
+    box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 4px 10px rgba(0,0,0,.12)}
+  .twk-chip[data-on="1"]{box-shadow:0 0 0 1.5px rgba(0,0,0,.85),
+    0 2px 6px rgba(0,0,0,.15)}
+  .twk-chip>span{position:absolute;top:0;bottom:0;right:0;width:34%;
+    display:flex;flex-direction:column;box-shadow:-1px 0 0 rgba(0,0,0,.1)}
+  .twk-chip>span>i{flex:1;box-shadow:0 -1px 0 rgba(0,0,0,.1)}
+  .twk-chip>span>i:first-child{box-shadow:none}
+  .twk-chip svg{position:absolute;top:6px;left:6px;width:13px;height:13px;
+    filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}
+`;
+
+// ── useTweaks ───────────────────────────────────────────────────────────────
+// Single source of truth for tweak values. setTweak persists via the host
+// (__edit_mode_set_keys → host rewrites the EDITMODE block on disk).
+function useTweaks(defaults) {
+  const [values, setValues] = React.useState(defaults);
+  // Accepts either setTweak('key', value) or setTweak({ key: value, ... }) so a
+  // useState-style call doesn't write a "[object Object]" key into the persisted
+  // JSON block.
+  const setTweak = React.useCallback((keyOrEdits, val) => {
+    const edits = typeof keyOrEdits === 'object' && keyOrEdits !== null
+      ? keyOrEdits : { [keyOrEdits]: val };
+    setValues((prev) => ({ ...prev, ...edits }));
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
+    // Same-window signal so in-page listeners (deck-stage rail thumbnails)
+    // can react — the parent message only reaches the host, not peers.
+    window.dispatchEvent(new CustomEvent('tweakchange', { detail: edits }));
+  }, []);
+  return [values, setTweak];
+}
+
+// ── TweaksPanel ─────────────────────────────────────────────────────────────
+// Floating shell. Registers the protocol listener BEFORE announcing
+// availability — if the announce ran first, the host's activate could land
+// before our handler exists and the toolbar toggle would silently no-op.
+// The close button posts __edit_mode_dismissed so the host's toolbar toggle
+// flips off in lockstep; the host echoes __deactivate_edit_mode back which
+// is what actually hides the panel.
+function TweaksPanel({ title = 'Tweaks', children }) {
+  const [open, setOpen] = React.useState(false);
+  const dragRef = React.useRef(null);
+  const offsetRef = React.useRef({ x: 16, y: 16 });
+  const PAD = 16;
+
+  const clampToViewport = React.useCallback(() => {
+    const panel = dragRef.current;
+    if (!panel) return;
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    const maxRight = Math.max(PAD, window.innerWidth - w - PAD);
+    const maxBottom = Math.max(PAD, window.innerHeight - h - PAD);
+    offsetRef.current = {
+      x: Math.min(maxRight, Math.max(PAD, offsetRef.current.x)),
+      y: Math.min(maxBottom, Math.max(PAD, offsetRef.current.y)),
+    };
+    panel.style.right = offsetRef.current.x + 'px';
+    panel.style.bottom = offsetRef.current.y + 'px';
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    clampToViewport();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', clampToViewport);
+      return () => window.removeEventListener('resize', clampToViewport);
+    }
+    const ro = new ResizeObserver(clampToViewport);
+    ro.observe(document.documentElement);
+    return () => ro.disconnect();
+  }, [open, clampToViewport]);
+
+  React.useEffect(() => {
+    const onMsg = (e) => {
+      const t = e?.data?.type;
+      if (t === '__activate_edit_mode') setOpen(true);
+      else if (t === '__deactivate_edit_mode') setOpen(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const dismiss = () => {
+    setOpen(false);
+    window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*');
+  };
+
+  const onDragStart = (e) => {
+    const panel = dragRef.current;
+    if (!panel) return;
+    const r = panel.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY;
+    const startRight = window.innerWidth - r.right;
+    const startBottom = window.innerHeight - r.bottom;
+    const move = (ev) => {
+      offsetRef.current = {
+        x: startRight - (ev.clientX - sx),
+        y: startBottom - (ev.clientY - sy),
+      };
+      clampToViewport();
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  if (!open) return null;
+  return (
+    <>
+      <style>{__TWEAKS_STYLE}</style>
+      <div ref={dragRef} className="twk-panel" data-omelette-chrome=""
+           style={{ right: offsetRef.current.x, bottom: offsetRef.current.y }}>
+        <div className="twk-hd" onMouseDown={onDragStart}>
+          <b>{title}</b>
+          <button className="twk-x" aria-label="Close tweaks"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={dismiss}>✕</button>
+        </div>
+        <div className="twk-body">
+          {children}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Layout helpers ──────────────────────────────────────────────────────────
+
+function TweakSection({ label, children }) {
+  return (
+    <>
+      <div className="twk-sect">{label}</div>
+      {children}
+    </>
+  );
+}
+
+function TweakRow({ label, value, children, inline = false }) {
+  return (
+    <div className={inline ? 'twk-row twk-row-h' : 'twk-row'}>
+      <div className="twk-lbl">
+        <span>{label}</span>
+        {value != null && <span className="twk-val">{value}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ── Controls ────────────────────────────────────────────────────────────────
+
+function TweakSlider({ label, value, min = 0, max = 100, step = 1, unit = '', onChange }) {
+  return (
+    <TweakRow label={label} value={`${value}${unit}`}>
+      <input type="range" className="twk-slider" min={min} max={max} step={step}
+             value={value} onChange={(e) => onChange(Number(e.target.value))} />
+    </TweakRow>
+  );
+}
+
+function TweakToggle({ label, value, onChange }) {
+  return (
+    <div className="twk-row twk-row-h">
+      <div className="twk-lbl"><span>{label}</span></div>
+      <button type="button" className="twk-toggle" data-on={value ? '1' : '0'}
+              role="switch" aria-checked={!!value}
+              onClick={() => onChange(!value)}><i /></button>
+    </div>
+  );
+}
+
+function TweakRadio({ label, value, options, onChange }) {
+  const trackRef = React.useRef(null);
+  const [dragging, setDragging] = React.useState(false);
+  // The active value is read by pointer-move handlers attached for the lifetime
+  // of a drag — ref it so a stale closure doesn't fire onChange for every move.
+  const valueRef = React.useRef(value);
+  valueRef.current = value;
+
+  // Segments wrap mid-word once per-segment width runs out. The track is
+  // ~248px (280 panel − 28 body pad − 4 seg pad), each button loses 12px
+  // to its own padding, and 11.5px system-ui averages ~6.3px/char — so 2
+  // options fit ~16 chars each, 3 fit ~10. Past that (or >3 options), fall
+  // back to a dropdown rather than wrap.
+  const labelLen = (o) => String(typeof o === 'object' ? o.label : o).length;
+  const maxLen = options.reduce((m, o) => Math.max(m, labelLen(o)), 0);
+  const fitsAsSegments = maxLen <= ({ 2: 16, 3: 10 }[options.length] ?? 0);
+  if (!fitsAsSegments) {
+    // <select> emits strings — map back to the original option value so the
+    // fallback stays type-preserving (numbers, booleans) like the segment path.
+    const resolve = (s) => {
+      const m = options.find((o) => String(typeof o === 'object' ? o.value : o) === s);
+      return m === undefined ? s : typeof m === 'object' ? m.value : m;
+    };
+    return <TweakSelect label={label} value={value} options={options}
+                        onChange={(s) => onChange(resolve(s))} />;
+  }
+  const opts = options.map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
+  const idx = Math.max(0, opts.findIndex((o) => o.value === value));
+  const n = opts.length;
+
+  const segAt = (clientX) => {
+    const r = trackRef.current.getBoundingClientRect();
+    const inner = r.width - 4;
+    const i = Math.floor(((clientX - r.left - 2) / inner) * n);
+    return opts[Math.max(0, Math.min(n - 1, i))].value;
+  };
+
+  const onPointerDown = (e) => {
+    setDragging(true);
+    const v0 = segAt(e.clientX);
+    if (v0 !== valueRef.current) onChange(v0);
+    const move = (ev) => {
+      if (!trackRef.current) return;
+      const v = segAt(ev.clientX);
+      if (v !== valueRef.current) onChange(v);
+    };
+    const up = () => {
+      setDragging(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  return (
+    <TweakRow label={label}>
+      <div ref={trackRef} role="radiogroup" onPointerDown={onPointerDown}
+           className={dragging ? 'twk-seg dragging' : 'twk-seg'}>
+        <div className="twk-seg-thumb"
+             style={{ left: `calc(2px + ${idx} * (100% - 4px) / ${n})`,
+                      width: `calc((100% - 4px) / ${n})` }} />
+        {opts.map((o) => (
+          <button key={o.value} type="button" role="radio" aria-checked={o.value === value}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </TweakRow>
+  );
+}
+
+function TweakSelect({ label, value, options, onChange }) {
+  return (
+    <TweakRow label={label}>
+      <select className="twk-field" value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map((o) => {
+          const v = typeof o === 'object' ? o.value : o;
+          const l = typeof o === 'object' ? o.label : o;
+          return <option key={v} value={v}>{l}</option>;
+        })}
+      </select>
+    </TweakRow>
+  );
+}
+
+function TweakText({ label, value, placeholder, onChange }) {
+  return (
+    <TweakRow label={label}>
+      <input className="twk-field" type="text" value={value} placeholder={placeholder}
+             onChange={(e) => onChange(e.target.value)} />
+    </TweakRow>
+  );
+}
+
+function TweakNumber({ label, value, min, max, step = 1, unit = '', onChange }) {
+  const clamp = (n) => {
+    if (min != null && n < min) return min;
+    if (max != null && n > max) return max;
+    return n;
+  };
+  const startRef = React.useRef({ x: 0, val: 0 });
+  const onScrubStart = (e) => {
+    e.preventDefault();
+    startRef.current = { x: e.clientX, val: value };
+    const decimals = (String(step).split('.')[1] || '').length;
+    const move = (ev) => {
+      const dx = ev.clientX - startRef.current.x;
+      const raw = startRef.current.val + dx * step;
+      const snapped = Math.round(raw / step) * step;
+      onChange(clamp(Number(snapped.toFixed(decimals))));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  return (
+    <div className="twk-num">
+      <span className="twk-num-lbl" onPointerDown={onScrubStart}>{label}</span>
+      <input type="number" value={value} min={min} max={max} step={step}
+             onChange={(e) => onChange(clamp(Number(e.target.value)))} />
+      {unit && <span className="twk-num-unit">{unit}</span>}
+    </div>
+  );
+}
+
+// Relative-luminance contrast pick — checkmarks drawn over a swatch need to
+// read on both #111 and #fafafa without per-option configuration. Hex input
+// only (#rgb / #rrggbb); named or rgb()/hsl() colors fall through to "light".
+function __twkIsLight(hex) {
+  const h = String(hex).replace('#', '');
+  const x = h.length === 3 ? h.replace(/./g, (c) => c + c) : h.padEnd(6, '0');
+  const n = parseInt(x.slice(0, 6), 16);
+  if (Number.isNaN(n)) return true;
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return r * 299 + g * 587 + b * 114 > 148000;
+}
+
+const __TwkCheck = ({ light }) => (
+  <svg viewBox="0 0 14 14" aria-hidden="true">
+    <path d="M3 7.2 5.8 10 11 4.2" fill="none" strokeWidth="2.2"
+          strokeLinecap="round" strokeLinejoin="round"
+          stroke={light ? 'rgba(0,0,0,.78)' : '#fff'} />
+  </svg>
+);
+
+// TweakColor — curated color/palette picker. Each option is either a single
+// hex string or an array of 1-5 hex strings; the card adapts — a lone color
+// renders solid, a palette renders colors[0] as the hero (left ~2/3) with the
+// rest stacked in a sharp column on the right. onChange emits the
+// option in the shape it was passed (string stays string, array stays array).
+// Without options it falls back to the native color input for back-compat.
+function TweakColor({ label, value, options, onChange }) {
+  if (!options || !options.length) {
+    return (
+      <div className="twk-row twk-row-h">
+        <div className="twk-lbl"><span>{label}</span></div>
+        <input type="color" className="twk-swatch" value={value}
+               onChange={(e) => onChange(e.target.value)} />
+      </div>
+    );
+  }
+  // Native <input type=color> emits lowercase hex per the HTML spec, so
+  // compare case-insensitively. String() guards JSON.stringify(undefined),
+  // which returns the primitive undefined (no .toLowerCase).
+  const key = (o) => String(JSON.stringify(o)).toLowerCase();
+  const cur = key(value);
+  return (
+    <TweakRow label={label}>
+      <div className="twk-chips" role="radiogroup">
+        {options.map((o, i) => {
+          const colors = Array.isArray(o) ? o : [o];
+          const [hero, ...rest] = colors;
+          const sup = rest.slice(0, 4);
+          const on = key(o) === cur;
+          return (
+            <button key={i} type="button" className="twk-chip" role="radio"
+                    aria-checked={on} data-on={on ? '1' : '0'}
+                    aria-label={colors.join(', ')} title={colors.join(' · ')}
+                    style={{ background: hero }}
+                    onClick={() => onChange(o)}>
+              {sup.length > 0 && (
+                <span>
+                  {sup.map((c, j) => <i key={j} style={{ background: c }} />)}
+                </span>
+              )}
+              {on && <__TwkCheck light={__twkIsLight(hero)} />}
+            </button>
+          );
+        })}
+      </div>
+    </TweakRow>
+  );
+}
+
+function TweakButton({ label, onClick, secondary = false }) {
+  return (
+    <button type="button" className={secondary ? 'twk-btn secondary' : 'twk-btn'}
+            onClick={onClick}>{label}</button>
+  );
+}
+
+Object.assign(window, {
+  useTweaks, TweaksPanel, TweakSection, TweakRow,
+  TweakSlider, TweakToggle, TweakRadio, TweakSelect,
+  TweakText, TweakNumber, TweakColor, TweakButton,
+});
+
+
+    // Mount IMMEDIATELY at end of Babel block (after all components defined)
+    try {
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<window.AppWithAuth />);
+    } catch(e) {
+      console.error('Mount error:', e);
+      document.getElementById('root').innerHTML = '<div style="color:red;padding:20px;">Error: ' + e.message + '</div>';
+    }
+  </script>
+</body>
+</html>
