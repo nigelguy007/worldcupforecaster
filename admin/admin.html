@@ -1,1 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Cup Forecaster — Admin</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Urbanist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #080808 100%);
+      color: #f5f5f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .login-container {
+      background: rgba(20,20,25,0.5);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 48px 40px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    .login-container.hidden { display: none; }
+    .admin-panel {
+      display: none;
+    }
+    .admin-panel.visible { display: block; }
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+    .header p {
+      font-size: 13px;
+      color: #888;
+      font-weight: 500;
+    }
+    .form-group {
+      margin-bottom: 24px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #ddd;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    input[type="password"] {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #f5f5f5;
+      font-size: 14px;
+      font-family: inherit;
+      transition: all 0.2s ease;
+    }
+    input[type="password"]:focus {
+      outline: none;
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(0,255,0,0.3);
+    }
+    .btn {
+      width: 100%;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .btn-login {
+      background: linear-gradient(135deg, #00ff00, #00cc00);
+      color: #032015;
+    }
+    .btn-login:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(0,255,0,0.3);
+    }
+    .error {
+      color: #ff6b6b;
+      font-size: 12px;
+      margin-top: 8px;
+      display: none;
+    }
+    .error.show { display: block; }
+    
+    /* Admin Panel */
+    .admin-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .admin-header {
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .admin-header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .btn-logout {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #f5f5f5;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-logout:hover {
+      background: rgba(255,255,255,0.12);
+    }
+    .section {
+      background: rgba(20,20,25,0.35);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 24px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      color: #f5f5f5;
+    }
+    .variant-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .variant-card {
+      background: rgba(255,255,255,0.02);
+      border: 2px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+    .variant-card:hover {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(255,255,255,0.15);
+    }
+    .variant-card.active {
+      border-color: #00ff00;
+      background: rgba(0,255,0,0.08);
+    }
+    .variant-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+    .variant-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f5f5f5;
+      margin-bottom: 4px;
+    }
+    .variant-desc {
+      font-size: 11px;
+      color: #888;
+      line-height: 1.4;
+    }
+    .status-box {
+      background: rgba(0,255,0,0.05);
+      border: 1px solid rgba(0,255,0,0.2);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 24px;
+    }
+    .status-label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .status-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #00ff00;
+    }
+    .open-forecaster {
+      display: inline-block;
+      background: linear-gradient(135deg, #00ff00, #00cc00);
+      color: #032015;
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: none;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 24px;
+      text-decoration: none;
+    }
+    .open-forecaster:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,255,0,0.3);
+    }
+  </style>
+</head>
+<body>
+  <!-- Login -->
+  <div class="login-container" id="login-form">
+    <div class="header">
+      <h1>🔐 Admin Access</h1>
+      <p>World Cup Forecaster Control Panel</p>
+    </div>
+    
+    <form onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Enter admin password" required autofocus>
+        <div class="error" id="error">Invalid password</div>
+      </div>
+      <button type="submit" class="btn btn-login">Sign In</button>
+    </form>
+  </div>
 
+  <!-- Admin Panel -->
+  <div class="admin-panel" id="admin-panel">
+    <div class="admin-container">
+      <div class="admin-header">
+        <h1>⚙️ Admin Control Panel</h1>
+        <button class="btn-logout" onclick="logout()">Logout</button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Select Monetization Variant</div>
+        
+        <div class="variant-grid">
+          <div class="variant-card" onclick="setVariant('none')">
+            <div class="variant-icon">⊘</div>
+            <div class="variant-name">No Monetization</div>
+            <div class="variant-desc">Clean experience</div>
+          </div>
+
+          <div class="variant-card" onclick="setVariant('subscription')">
+            <div class="variant-icon">💳</div>
+            <div class="variant-name">Premium</div>
+            <div class="variant-desc">$4.99–9.99/mo</div>
+          </div>
+
+          <div class="variant-card" onclick="setVariant('gamification')">
+            <div class="variant-icon">🏆</div>
+            <div class="variant-name">Tournaments</div>
+            <div class="variant-desc">$10 entry</div>
+          </div>
+
+          <div class="variant-card" onclick="setVariant('expert-tips')">
+            <div class="variant-icon">💡</div>
+            <div class="variant-name">Expert Tips</div>
+            <div class="variant-desc">$2.99/week</div>
+          </div>
+
+          <div class="variant-card" onclick="setVariant('ads')">
+            <div class="variant-icon">📢</div>
+            <div class="variant-name">Ads</div>
+            <div class="variant-desc">Contextual ads</div>
+          </div>
+        </div>
+
+        <div class="status-box">
+          <div class="status-label">Active Variant</div>
+          <div class="status-value" id="current-variant">None</div>
+        </div>
+
+        <a href="../World%20Cup%20Forecaster.html" class="open-forecaster" target="_blank">📊 Open Forecaster</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ADMIN_PASSWORD = 'world2026'; // Change this to your password
+
+    // Check if already logged in
+    window.addEventListener('load', () => {
+      const token = sessionStorage.getItem('wcf_admin_token');
+      if (token === 'authenticated') {
+        showAdminPanel();
+      }
+    });
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const password = document.getElementById('password').value;
+      
+      if (password === ADMIN_PASSWORD) {
+        sessionStorage.setItem('wcf_admin_token', 'authenticated');
+        showAdminPanel();
+      } else {
+        document.getElementById('error').classList.add('show');
+        document.getElementById('password').value = '';
+      }
+    }
+
+    function showAdminPanel() {
+      document.getElementById('login-form').classList.add('hidden');
+      document.getElementById('admin-panel').classList.add('visible');
+      updateVariantDisplay();
+    }
+
+    function logout() {
+      sessionStorage.removeItem('wcf_admin_token');
+      document.getElementById('login-form').classList.remove('hidden');
+      document.getElementById('admin-panel').classList.remove('visible');
+      document.getElementById('password').value = '';
+      document.getElementById('error').classList.remove('show');
+      document.getElementById('password').focus();
+    }
+
+    function setVariant(variant) {
+      localStorage.setItem('wcf_monetization_variant', variant);
+      updateVariantDisplay();
+    }
+
+    function updateVariantDisplay() {
+      const variant = localStorage.getItem('wcf_monetization_variant') || 'none';
+      const variantNames = {
+        'none': 'No Monetization',
+        'subscription': 'Premium Forecasts',
+        'gamification': 'Prediction Tournaments',
+        'expert-tips': 'Expert Tips & Picks',
+        'ads': 'Non-Intrusive Ads'
+      };
+      
+      document.getElementById('current-variant').textContent = variantNames[variant];
+
+      // Update card styles
+      document.querySelectorAll('.variant-card').forEach((card, i) => {
+        card.classList.remove('active');
+      });
+      
+      const cards = document.querySelectorAll('.variant-card');
+      const keys = Object.keys(variantNames);
+      cards.forEach((card, i) => {
+        if (keys[i] === variant) {
+          card.classList.add('active');
+        }
+      });
+    }
+  </script>
+</body>
+</html>
